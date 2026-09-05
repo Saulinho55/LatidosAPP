@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,600;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+
+/* ── Light theme (default) ── */
+:root {
+  --color-primary:     #FFDFE0;
+  --color-secondary:   #032617;
+  --color-accent:      #5E000E;
+  --color-detail:      #B6737F;
+  --color-header-bg:   #032617;
+  --color-header-text: #FFDFE0;
+  --color-card:        #FFFFFF;
+  --color-card-alt:    #fdf0f1;
+  --color-border:      rgba(3,38,23,0.08);
+  --color-text:        #032617;
+  --color-text-muted:  #B6737F;
+  --color-input-bg:    #f9f4f4;
+  --color-nav:         #FFFFFF;
+  --color-nav-text:    #aaa;
+  --color-white:       #FFFFFF;
+
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-main:    'DM Sans', system-ui, sans-serif;
+
+  --shadow-card: 0 2px 20px rgba(0,0,0,0.45);
+  --shadow-nav:  0 -4px 28px rgba(0,0,0,0.55);
+  --transition:  0.3s ease;
+}
+
+/* ── Dark / Black theme ── */
+[data-theme="dark"] {
+  --color-primary:     #0a0a0f;
+  --color-secondary:   #f5e6e8;
+  --color-accent:      #d4607a;
+  --color-detail:      #a07880;
+  --color-header-bg:   #12121a;
+  --color-header-text: #f5e6e8;
+  --color-card:        #14141e;
+  --color-card-alt:    #1c1c28;
+  --color-border:      rgba(245,230,232,0.07);
+  --color-text:        #f5e6e8;
+  --color-text-muted:  #8a7880;
+  --color-input-bg:    #1c1c28;
+  --color-nav:         #0d0d14;
+  --color-nav-text:    rgba(245,230,232,0.28);
+  --color-white:       #14141e;
+
+  --shadow-card: 0 2px 20px rgba(0,0,0,0.45);
+  --shadow-nav:  0 -4px 28px rgba(0,0,0,0.55);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  transition: background-color var(--transition), color var(--transition),
+              border-color var(--transition), box-shadow var(--transition);
+}
+
+html, body {
+  font-family: var(--font-main);
+  background-color: var(--color-primary);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  background-color: var(--color-primary);
+}
+
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; }
+
+button { font-family: var(--font-main); cursor: pointer; border: none; outline: none; }

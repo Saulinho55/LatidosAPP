@@ -1,0 +1,8 @@
+{
+  "appId": "app.latidos.app",
+  "appName": "Latidos",
+  "webDir": "dist",
+  "server": {
+    "cleartext": true
+  }
+}
