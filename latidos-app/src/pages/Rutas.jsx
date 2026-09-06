@@ -10,7 +10,7 @@ delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
 });
 
 // Custom icon for points (green)
@@ -21,6 +21,19 @@ const pointIcon = new L.Icon({
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
   shadowSize: [41, 41]
+});
+
+// Live pulsing green user GPS icon
+const userGreenMarker = L.divIcon({
+  className: '',
+  html: `
+    <div style="position: relative; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">
+      <div style="position: absolute; inset: 0; background: rgba(34, 197, 94, 0.45); border-radius: 50%; animation: pulseRing 1.5s infinite ease-out;"></div>
+      <div style="position: relative; width: 16px; height: 16px; background: #22c55e; border: 3px solid white; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.4);"></div>
+    </div>
+  `,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15]
 });
 
 const formatDistance = (meters) => {
@@ -58,12 +71,13 @@ const LiveMap = ({ position, route, points, targetRoute, onRemovePoint, tr }) =>
           <Polyline positions={targetPositions} color="#3b82f6" weight={5} opacity={0.65} dashArray="8, 8" />
         )}
 
-        {/* Live user walked route (bright green) */}
+        {/* Live user walked route (bright emerald green) */}
         {positions.length > 0 && (
-          <Polyline positions={positions} color="#22c55e" weight={6} opacity={0.9} />
+          <Polyline positions={positions} color="#22c55e" weight={6} opacity={0.95} />
         )}
         
-        <Marker position={[position.lat, position.lon]}>
+        {/* User GPS Live Marker in Green */}
+        <Marker position={[position.lat, position.lon]} icon={userGreenMarker}>
           <Popup>{tr?.tuEstasAqui || 'Tú estás aquí'}</Popup>
         </Marker>
         
@@ -71,7 +85,7 @@ const LiveMap = ({ position, route, points, targetRoute, onRemovePoint, tr }) =>
           <Marker key={i} position={[pt.lat, pt.lon]} icon={pointIcon}>
             <Popup>
               <div style={{ textAlign: 'center', padding: '0.2rem' }}>
-                <p style={{ margin: '0 0 0.4rem', fontWeight: 'bold' }}>{tr?.puntoAnadido || 'Punto'} {i+1}</p>
+                <p style={{ margin: '0 0 0.4rem', fontWeight: 'bold', color: '#15803d' }}>📍 {tr?.puntoAnadido || 'Punto'} {i+1}</p>
                 <button
                   onClick={() => onRemovePoint(i)}
                   style={{
@@ -105,10 +119,10 @@ const RouteMap = ({ routePath, routePoints, tr }) => {
     <div style={{ height: '200px', width: '100%', borderRadius: '1rem', overflow: 'hidden', marginTop: '1rem', zIndex: 0 }}>
       <MapContainer center={center} zoom={15} style={{ height: '100%', width: '100%', zIndex: 1 }} zoomControl={false}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
-        <Polyline positions={positions} color="#22c55e" weight={4} opacity={0.8} />
+        <Polyline positions={positions} color="#22c55e" weight={5} opacity={0.9} />
         
-        <Marker position={positions[0]}><Popup>{tr?.inicioRuta || 'Inicio de la ruta'}</Popup></Marker>
-        <Marker position={positions[positions.length - 1]}><Popup>{tr?.finRuta || 'Fin de la ruta'}</Popup></Marker>
+        <Marker position={positions[0]} icon={pointIcon}><Popup>{tr?.inicioRuta || 'Inicio de la ruta'}</Popup></Marker>
+        <Marker position={positions[positions.length - 1]} icon={pointIcon}><Popup>{tr?.finRuta || 'Fin de la ruta'}</Popup></Marker>
 
         {routePoints && routePoints.map((pt, i) => (
           <Marker key={i} position={[pt.lat, pt.lon]} icon={pointIcon}>
@@ -158,7 +172,7 @@ const EditRouteModal = ({ route, onClose, onSave, tr }) => {
           <MapContainer center={center} zoom={15} style={{ height: '100%', width: '100%', zIndex: 1 }} zoomControl={false}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             <MapEvents />
-            <Polyline positions={positions} color="#22c55e" weight={4} opacity={0.6} />
+            <Polyline positions={positions} color="#22c55e" weight={4} opacity={0.8} />
             
             {points.map((pt, i) => (
               <Marker 
@@ -212,7 +226,7 @@ const RutasPage = () => {
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [routeName, setRouteName] = useState('');
   const [expandedRouteId, setExpandedRouteId] = useState(null);
-  const [replicatedRoute, setReplicatedRoute] = useState(null); // Saved route being replayed/followed
+  const [replicatedRoute, setReplicatedRoute] = useState(null);
 
   useEffect(() => {
     if (isTracking) {
@@ -224,9 +238,7 @@ const RutasPage = () => {
   }, [isTracking]);
 
   const speedKmh = elapsed > 0 ? ((distanceM / 1000) / (elapsed / 3600)) : 0;
-  // Standard human walking conversion: ~1.312 steps per meter (0.76m stride)
   const routeSteps = Math.round(distanceM * 1.312);
-  // 1 Latido earned per 100 steps
   const earnedLatidos = Math.floor(routeSteps / 100);
 
   const handleStartRoute = () => {
@@ -324,26 +336,42 @@ const RutasPage = () => {
     <div style={{ paddingBottom: '6rem', paddingTop: '0.5rem' }}>
       {/* Header */}
       <div style={{
-        backgroundColor: 'var(--color-header-bg)', color: 'var(--color-header-text)',
-        padding: '1.8rem 1.8rem 2rem', borderRadius: '1.5rem', margin: '1rem 1rem 0.75rem', textAlign: 'left'
+        backgroundColor: 'var(--color-header-bg)',
+        color: 'var(--color-header-text)',
+        padding: '1.8rem 1.8rem 2rem',
+        borderRadius: '1.5rem',
+        margin: '1rem 1rem 0.75rem',
+        textAlign: 'left',
+        border: isTracking ? '2px solid rgba(34, 197, 94, 0.4)' : 'none',
+        boxShadow: isTracking ? '0 4px 20px rgba(34, 197, 94, 0.2)' : 'none'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <p style={{ fontSize: '0.95rem', fontWeight: '400', marginBottom: '0.4rem', opacity: 0.85 }}>
               {replicatedRoute ? `🧭 ${tr?.replicandoRuta || 'Replicando ruta'}: ${replicatedRoute.name}` : (tr?.misRutas || 'Mis Rutas')}
             </p>
-            <div style={{ fontSize: '2.8rem', fontWeight: '700', fontStyle: 'italic', lineHeight: '1', marginBottom: '0.3rem' }}>
+            {/* Live Distance in Green when active */}
+            <div style={{
+              fontSize: '2.8rem',
+              fontWeight: '700',
+              fontStyle: 'italic',
+              lineHeight: '1',
+              marginBottom: '0.3rem',
+              color: isTracking ? '#22c55e' : 'var(--color-header-text)',
+              transition: 'color 0.3s ease',
+              textShadow: isTracking ? '0 0 16px rgba(34, 197, 94, 0.4)' : 'none'
+            }}>
               {formatDistance(distanceM)}
             </div>
-            <p style={{ fontSize: '0.95rem', opacity: 0.9, fontWeight: '600' }}>
+            <p style={{ fontSize: '0.95rem', opacity: 0.9, fontWeight: '600', color: isTracking ? '#86efac' : 'inherit' }}>
               👟 {routeSteps.toLocaleString('es-ES')} {tr?.pasos || 'pasos'}
             </p>
           </div>
 
-          {/* Heart Badge with potential latidos (1 latido per 100 steps) */}
+          {/* Heart Badge with potential latidos */}
           <div style={{
-            backgroundColor: 'rgba(255,255,255,0.18)',
-            border: '1px solid rgba(255,255,255,0.3)',
+            backgroundColor: isTracking ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.18)',
+            border: isTracking ? '1.5px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(255,255,255,0.3)',
             borderRadius: '1.2rem',
             padding: '0.6rem 0.9rem',
             textAlign: 'center',
@@ -354,7 +382,7 @@ const RutasPage = () => {
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
           }}>
             <span style={{ fontSize: '1.6rem', lineHeight: '1' }}>❤</span>
-            <span style={{ fontSize: '1.25rem', fontWeight: '800', marginTop: '0.2rem' }}>
+            <span style={{ fontSize: '1.25rem', fontWeight: '800', marginTop: '0.2rem', color: isTracking ? '#22c55e' : 'inherit' }}>
               +{earnedLatidos}
             </span>
             <span style={{ fontSize: '0.68rem', opacity: 0.85, fontWeight: '600', textTransform: 'uppercase' }}>
@@ -363,16 +391,21 @@ const RutasPage = () => {
           </div>
         </div>
 
-        <p style={{ fontSize: '0.85rem', opacity: 0.85, marginTop: '0.75rem' }}>
-          {isTracking 
-            ? `📍 ${tr?.rutaGrabando || tr?.registrarRuta || 'Grabando ruta'}...` 
-            : isRouteActive 
-              ? `⏸️ ${tr?.rutaEnPausa || 'Ruta en pausa / detenida'}` 
-              : (tr?.iniciarRuta || 'Inicia una ruta para comenzar')}
+        <p style={{ fontSize: '0.85rem', marginTop: '0.75rem' }}>
+          {isTracking ? (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#22c55e', fontWeight: '700' }}>
+              <span style={{ width: '9px', height: '9px', backgroundColor: '#22c55e', borderRadius: '50%', display: 'inline-block', animation: 'pulseGreenDot 1.2s infinite' }}></span>
+              {tr?.rutaGrabando || tr?.registrarRuta || 'Grabando ruta activa'}...
+            </span>
+          ) : isRouteActive ? (
+            `⏸️ ${tr?.rutaEnPausa || 'Ruta en pausa / detenida'}`
+          ) : (
+            tr?.iniciarRuta || 'Inicia una ruta para comenzar'
+          )}
         </p>
       </div>
 
-      {/* Live Map (Appears when route is active / tracking) */}
+      {/* Live Map with green user marker and green polyline */}
       {isRouteActive && position && (
         <LiveMap
           position={position}
@@ -388,17 +421,17 @@ const RutasPage = () => {
       {isRouteActive && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.6rem', margin: '0 1rem 0.75rem' }}>
           <div style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '0.85rem 0.5rem', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
-            <p style={{ fontSize: '0.72rem', color: 'var(--color-detail)', marginBottom: '0.2rem' }}>{tr?.tiempo || 'Tiempo'}</p>
+            <p style={{ fontSize: '0.72rem', color: 'var(--color-detail)', marginBottom: '0.2rem' }}>⏱ {tr?.tiempo || 'Tiempo'}</p>
             <p style={{ fontSize: '1.35rem', fontWeight: '700', fontStyle: 'italic', color: 'var(--color-text)' }}>{formatTime(elapsed)}</p>
           </div>
-          <div style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '0.85rem 0.5rem', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
-            <p style={{ fontSize: '0.72rem', color: 'var(--color-detail)', marginBottom: '0.2rem' }}>{tr?.pasos || 'Pasos'}</p>
-            <p style={{ fontSize: '1.35rem', fontWeight: '700', fontStyle: 'italic', color: 'var(--color-accent)' }}>
+          <div style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '0.85rem 0.5rem', textAlign: 'center', boxShadow: 'var(--shadow-card)', border: isTracking ? '1.5px solid rgba(34, 197, 94, 0.3)' : 'none' }}>
+            <p style={{ fontSize: '0.72rem', color: isTracking ? '#16a34a' : 'var(--color-detail)', marginBottom: '0.2rem', fontWeight: '600' }}>👟 {tr?.pasos || 'Pasos'}</p>
+            <p style={{ fontSize: '1.35rem', fontWeight: '700', fontStyle: 'italic', color: isTracking ? '#22c55e' : 'var(--color-accent)' }}>
               {routeSteps.toLocaleString('es-ES')}
             </p>
           </div>
           <div style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '0.85rem 0.5rem', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
-            <p style={{ fontSize: '0.72rem', color: 'var(--color-detail)', marginBottom: '0.2rem' }}>{tr?.velocidad || 'Velocidad'}</p>
+            <p style={{ fontSize: '0.72rem', color: 'var(--color-detail)', marginBottom: '0.2rem' }}>⚡ {tr?.velocidad || 'Velocidad'}</p>
             <p style={{ fontSize: '1.35rem', fontWeight: '700', fontStyle: 'italic', color: 'var(--color-text)' }}>
               {speedKmh.toFixed(1).replace('.', ',')}<span style={{ fontSize: '0.75rem', fontStyle: 'normal', fontWeight: '400' }}> km/h</span>
             </p>
@@ -409,17 +442,18 @@ const RutasPage = () => {
       {/* Points chips during active recording */}
       {isRouteActive && points.length > 0 && (
         <div style={{ margin: '0 1rem 0.75rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontFamily: 'var(--font-main)' }}>Puntos:</span>
+          <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: '700', fontFamily: 'var(--font-main)' }}>🟢 Puntos verdes:</span>
           {points.map((pt, i) => (
             <span
               key={i}
               style={{
-                backgroundColor: 'var(--color-card)',
-                border: '1px solid var(--color-border)',
+                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                border: '1px solid rgba(34, 197, 94, 0.35)',
                 borderRadius: '1rem',
                 padding: '0.2rem 0.6rem',
                 fontSize: '0.75rem',
-                color: 'var(--color-text)',
+                color: '#15803d',
+                fontWeight: '600',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.3rem'
@@ -446,7 +480,7 @@ const RutasPage = () => {
         {!isRouteActive ? (
           <button 
             onClick={handleStartRoute} 
-            style={{ backgroundColor: 'var(--color-accent)', color: 'white', padding: '0.95rem', borderRadius: '2.5rem', width: '100%', fontSize: '1rem', fontWeight: '700', border: 'none', cursor: 'pointer', boxShadow: '0 4px 12px rgba(212, 96, 122, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+            style={{ backgroundColor: '#22c55e', color: 'white', padding: '0.95rem', borderRadius: '2.5rem', width: '100%', fontSize: '1rem', fontWeight: '700', border: 'none', cursor: 'pointer', boxShadow: '0 4px 14px rgba(34, 197, 94, 0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
           >
             ▶ {tr?.iniciarRuta || 'Iniciar ruta'}
           </button>
@@ -462,7 +496,7 @@ const RutasPage = () => {
                 </button>
                 <button 
                   onClick={addPoint} 
-                  style={{ flex: 1, backgroundColor: '#2ecc71', color: 'white', padding: '0.85rem', borderRadius: '2.5rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontSize: '0.95rem' }}
+                  style={{ flex: 1, backgroundColor: '#22c55e', color: 'white', padding: '0.85rem', borderRadius: '2.5rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontSize: '0.95rem', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)' }}
                 >
                   📍 {tr?.anadirPunto || 'Añadir Punto'}
                 </button>
@@ -471,7 +505,7 @@ const RutasPage = () => {
               <div style={{ display: 'flex', gap: '0.6rem' }}>
                 <button 
                   onClick={startTracking} 
-                  style={{ flex: 1, backgroundColor: '#2ecc71', color: 'white', padding: '0.85rem', borderRadius: '2.5rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontSize: '0.95rem' }}
+                  style={{ flex: 1, backgroundColor: '#22c55e', color: 'white', padding: '0.85rem', borderRadius: '2.5rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontSize: '0.95rem', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)' }}
                 >
                   ▶ {tr?.reanudarRuta || tr?.reanudar || 'Reanudar'}
                 </button>
@@ -522,7 +556,7 @@ const RutasPage = () => {
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <div style={{ backgroundColor: 'rgba(212, 96, 122, 0.1)', color: 'var(--color-accent)', padding: '0.4rem 0.8rem', borderRadius: '1rem', fontSize: '0.85rem', fontWeight: '600' }}>
+                    <div style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: '#16a34a', padding: '0.4rem 0.8rem', borderRadius: '1rem', fontSize: '0.85rem', fontWeight: '700' }}>
                       +{rt.latidos_earned} ❤
                     </div>
                   </div>
@@ -558,12 +592,12 @@ const RutasPage = () => {
           <div style={{ backgroundColor: 'var(--color-card)', padding: '1.5rem', borderRadius: '1.5rem', width: '100%', maxWidth: '400px' }}>
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--color-text)', marginBottom: '0.5rem' }}>{tr?.guardarRuta || 'Guardar Ruta'}</h3>
             <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-              {formatDistance(distanceM)} • {routeSteps.toLocaleString('es-ES')} {tr?.pasos || 'pasos'} • +{earnedLatidos} ❤
+              <span style={{ color: '#22c55e', fontWeight: 'bold' }}>{formatDistance(distanceM)}</span> • {routeSteps.toLocaleString('es-ES')} {tr?.pasos || 'pasos'} • +{earnedLatidos} ❤
             </p>
             <input type="text" value={routeName} onChange={(e) => setRouteName(e.target.value)} placeholder={tr?.nombreRutaPlaceholder || 'Nombre de la ruta'} style={{ width: '100%', padding: '0.9rem', borderRadius: '1rem', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text)', marginBottom: '1.5rem', fontSize: '1rem', outline: 'none' }} />
             <div style={{ display: 'flex', gap: '0.6rem' }}>
               <button onClick={() => setShowSaveModal(false)} style={{ flex: 1, padding: '0.8rem', borderRadius: '2rem', border: 'none', backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text)', fontWeight: '600', cursor: 'pointer' }}>{tr?.cancelar || 'Cancelar'}</button>
-              <button onClick={handleSaveRoute} style={{ flex: 1, padding: '0.8rem', borderRadius: '2rem', border: 'none', backgroundColor: 'var(--color-accent)', color: 'white', fontWeight: '600', cursor: 'pointer' }}>{tr?.guardar || 'Guardar'}</button>
+              <button onClick={handleSaveRoute} style={{ flex: 1, padding: '0.8rem', borderRadius: '2rem', border: 'none', backgroundColor: '#22c55e', color: 'white', fontWeight: '700', cursor: 'pointer' }}>{tr?.guardar || 'Guardar'}</button>
             </div>
           </div>
         </div>
@@ -608,6 +642,17 @@ const RutasPage = () => {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes pulseRing {
+          0% { transform: scale(0.6); opacity: 0.9; }
+          100% { transform: scale(1.7); opacity: 0; }
+        }
+        @keyframes pulseGreenDot {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.3; transform: scale(0.8); }
+        }
+      `}</style>
     </div>
   );
 };

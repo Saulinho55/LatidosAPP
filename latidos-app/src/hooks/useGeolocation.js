@@ -77,6 +77,13 @@ export const useGeolocation = () => {
     setError(null);
     setPermissionState('requesting');
 
+    if (position) {
+      setRoute(prev => prev.length === 0 ? [{ lat: position.lat, lon: position.lon }] : prev);
+      if (!lastPointRef.current) {
+        lastPointRef.current = { lat: position.lat, lon: position.lon };
+      }
+    }
+
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setPermissionState('granted');
@@ -109,7 +116,7 @@ export const useGeolocation = () => {
     }
 
     setIsTracking(true);
-  }, [handlePosition]);
+  }, [handlePosition, position]);
 
   const stopTracking = useCallback(() => {
     if (watchIdRef.current !== null) {
