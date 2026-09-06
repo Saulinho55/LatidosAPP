@@ -182,13 +182,29 @@ const Perfil = () => {
 
         {/* Info */}
         <div style={{ flex: 1 }}>
-          <p style={{
-            fontFamily: 'var(--font-main)',
-            fontSize: '0.8rem',
-            color: 'var(--color-header-text)',
-            opacity: 0.6,
-            marginBottom: '0.15rem'
-          }}>{user?.email || 'usuario@latidos.app'}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.15rem' }}>
+            <p style={{
+              fontFamily: 'var(--font-main)',
+              fontSize: '0.8rem',
+              color: 'var(--color-header-text)',
+              opacity: 0.7
+            }}>{user?.email || 'usuario@latidos.app'}</p>
+            {user?.role === 'superadmin' && (
+              <span style={{ fontSize: '0.68rem', backgroundColor: '#eab308', color: '#000', fontWeight: '800', padding: '0.1rem 0.4rem', borderRadius: '1rem' }}>
+                👑 SuperAdmin
+              </span>
+            )}
+            {user?.role === 'admin' && (
+              <span style={{ fontSize: '0.68rem', backgroundColor: 'var(--color-accent)', color: '#fff', fontWeight: '700', padding: '0.1rem 0.4rem', borderRadius: '1rem' }}>
+                ⚡ Admin
+              </span>
+            )}
+            {user?.role === 'comercio' && (
+              <span style={{ fontSize: '0.68rem', backgroundColor: '#10b981', color: '#fff', fontWeight: '700', padding: '0.1rem 0.4rem', borderRadius: '1rem' }}>
+                🏪 Comercio
+              </span>
+            )}
+          </div>
           <p style={{
             fontFamily: 'var(--font-display)',
             fontSize: '1.5rem',
@@ -196,29 +212,68 @@ const Perfil = () => {
             color: 'var(--color-header-text)',
             lineHeight: '1.1'
           }}>{user?.name || 'Usuario'}</p>
-          <div style={{
-            marginTop: '0.4rem',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.3rem',
-            backgroundColor: 'var(--color-card-alt)',
-            borderRadius: '1rem',
-            padding: '0.2rem 0.6rem',
-            border: '1px solid var(--color-border)'
-          }}>
-            <span style={{ fontSize: '0.85rem' }}>❤</span>
-            <span style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: '1.1rem',
-              fontWeight: '600',
-              color: 'var(--color-header-text)'
-            }}>{latidos.toLocaleString('es-ES')}</span>
-            <span style={{
-              fontFamily: 'var(--font-main)',
-              fontSize: '0.72rem',
-              color: 'var(--color-header-text)',
-              opacity: 0.7
-            }}>{tr?.navLatidos || 'Latidos'}</span>
+          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginTop: '0.4rem', flexWrap: 'wrap' }}>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              backgroundColor: 'var(--color-card-alt)',
+              borderRadius: '1rem',
+              padding: '0.2rem 0.6rem',
+              border: '1px solid var(--color-border)'
+            }}>
+              <span style={{ fontSize: '0.85rem' }}>❤</span>
+              <span style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '1.1rem',
+                fontWeight: '600',
+                color: 'var(--color-header-text)'
+              }}>{(latidos || 0).toLocaleString('es-ES')}</span>
+              <span style={{
+                fontFamily: 'var(--font-main)',
+                fontSize: '0.72rem',
+                color: 'var(--color-header-text)',
+                opacity: 0.7
+              }}>{tr?.navLatidos || 'Latidos'}</span>
+            </div>
+
+            {(user?.role === 'admin' || user?.role === 'superadmin') && (
+              <button
+                onClick={() => navigate('/admin')}
+                style={{
+                  backgroundColor: 'var(--color-accent)',
+                  color: 'white',
+                  padding: '0.25rem 0.75rem',
+                  borderRadius: '1rem',
+                  fontSize: '0.75rem',
+                  fontWeight: '700',
+                  fontFamily: 'var(--font-main)',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                Panel Admin →
+              </button>
+            )}
+
+            {user?.role === 'comercio' && (
+              <button
+                onClick={() => navigate('/comercio')}
+                style={{
+                  backgroundColor: '#059669',
+                  color: 'white',
+                  padding: '0.25rem 0.75rem',
+                  borderRadius: '1rem',
+                  fontSize: '0.75rem',
+                  fontWeight: '700',
+                  fontFamily: 'var(--font-main)',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                Panel Comercio →
+              </button>
+            )}
           </div>
         </div>
       </div>

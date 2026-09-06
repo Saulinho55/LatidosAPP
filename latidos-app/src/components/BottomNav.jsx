@@ -118,6 +118,16 @@ const Icons = {
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
       </svg>
     </div>
+  ),
+  horario: ({ active }) => (
+    <div style={{ width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+        stroke={active ? 'var(--color-secondary)' : 'var(--color-nav-text)'}
+        strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+    </div>
   )
 };
 
@@ -135,16 +145,17 @@ const BottomNav = () => {
     { path: '/perfil',     label: tr?.navPerfil || 'Perfil',      icon: 'perfil'    },
   ];
 
-  if (user?.role === 'admin') {
+  if (user?.role === 'admin' || user?.role === 'superadmin') {
     // Remove 'rutas', 'cartera' and 'actividad' for admins
     items = items.filter(item => item.path !== '/rutas' && item.path !== '/cartera' && item.path !== '/actividad');
     // Add 'Admin' tab
-    items.push({ path: '/admin', label: tr?.navAdmin || 'Admin', icon: 'admin' });
+    items.push({ path: '/admin', label: user?.role === 'superadmin' ? 'SuperAdmin' : (tr?.navAdmin || 'Admin'), icon: 'admin' });
   } else if (user?.role === 'comercio') {
     items = [
       { path: '/comercio',          label: tr?.navHoy || 'Hoy',           icon: 'comercios' },
       { path: '/comercio/validar',  label: tr?.navValidar || 'Validar',   icon: 'validar'   },
       { path: '/comercio/bonos',    label: tr?.navBonos || 'Bonos',       icon: 'bonos'     },
+      { path: '/comercio/horario',  label: 'Horarios',                    icon: 'horario'   },
       { path: '/comercio/informe',  label: tr?.navInforme || 'Informe',   icon: 'informe'   },
       { path: '/perfil',            label: tr?.navPerfil || 'Perfil',     icon: 'perfil'    },
     ];

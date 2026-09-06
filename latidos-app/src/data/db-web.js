@@ -340,18 +340,58 @@ const seedData = async () => {
     await put('users', { id: 1, email: 'usuario@latidos.app', password: 'demo123', name: 'Usuario Demo', latidos: 1130, steps_today: 0, racha: 6, weekly_steps: '[4200,6100,8500,9200,7800,11200,0]', daily_goal: 10000, role: 'user', comercio_id: null });
     await put('users', { id: 2, email: 'admin@latidos.app', password: 'admin123', name: 'Administrador', latidos: 0, steps_today: 0, racha: 0, weekly_steps: '[0,0,0,0,0,0,0]', daily_goal: 10000, role: 'admin', comercio_id: null });
     await put('users', { id: 3, email: 'fruteria@latidos.app', password: 'demo123', name: 'Frutería La Majorera', latidos: 0, steps_today: 0, racha: 0, weekly_steps: '[0,0,0,0,0,0,0]', daily_goal: 10000, role: 'comercio', comercio_id: 2 });
+    await put('users', { id: 4, email: 'superadmin@latidos.app', password: 'super123', name: 'Super Administrador', latidos: 9999, steps_today: 0, racha: 10, weekly_steps: '[0,0,0,0,0,0,0]', daily_goal: 10000, role: 'superadmin', comercio_id: null });
     await put('preferences', { id: 1, user_id: 1, theme: 'light', language: 'es', currency: 'EUR' });
     await put('preferences', { id: 2, user_id: 2, theme: 'dark', language: 'es', currency: 'EUR' });
     await put('preferences', { id: 3, user_id: 3, theme: 'light', language: 'es', currency: 'EUR' });
+    await put('preferences', { id: 4, user_id: 4, theme: 'dark', language: 'es', currency: 'EUR' });
+  } else {
+    // If users already exist, ensure superadmin is present
+    const hasSuper = users.some(u => u.role === 'superadmin' || u.email === 'superadmin@latidos.app');
+    if (!hasSuper) {
+      await put('users', {
+        email: 'superadmin@latidos.app',
+        password: 'super123',
+        name: 'Super Administrador',
+        latidos: 9999,
+        steps_today: 0,
+        racha: 10,
+        weekly_steps: '[0,0,0,0,0,0,0]',
+        daily_goal: 10000,
+        role: 'superadmin',
+        comercio_id: null
+      });
+    }
   }
+
+  const defaultHorarioStandard = {
+    lunes: '09:00 - 14:00, 17:00 - 20:30',
+    martes: '09:00 - 14:00, 17:00 - 20:30',
+    miercoles: '09:00 - 14:00, 17:00 - 20:30',
+    jueves: '09:00 - 14:00, 17:00 - 20:30',
+    viernes: '09:00 - 14:00, 17:00 - 20:30',
+    sabado: '09:30 - 14:00',
+    domingo: 'Cerrado'
+  };
 
   const comercios = await getAll('comercios');
   if (comercios.length === 0) {
-    await put('comercios', { id: 1, nombre: 'Cafetería El Guiniguada', categoria: 'Cafetería', direccion: 'C/ León y Castillo, 14', lat: 28.0034, lon: -15.4144, descuento: 2, latidos_necesarios: 200, color: '#B6737F', emoji: '☕', bonos: '[]' });
-    await put('comercios', { id: 2, nombre: 'Frutería La Majorera', categoria: 'Frutería', direccion: 'Plaza de San Gregorio, 3', lat: 28.0048, lon: -15.4158, descuento: 3, latidos_necesarios: 300, color: '#4CAF50', emoji: '🍎', bonos: '[{"titulo":"Bono Fruta Fresca","descripcion":"1 kg de fruta gratis"}]' });
-    await put('comercios', { id: 3, nombre: 'Moda Tara', categoria: 'Tienda de ropa', direccion: 'C/ Inés Chemida, 22', lat: 28.0021, lon: -15.4139, descuento: 5, latidos_necesarios: 500, color: '#9C27B0', emoji: '👗', bonos: '[{"titulo":"Rebajas Especiales","descripcion":"10% extra en toda la tienda"}]' });
-    await put('comercios', { id: 4, nombre: 'Panadería San Gregorio', categoria: 'Panadería', direccion: 'C/ Real de Telde, 8', lat: 28.0055, lon: -15.4162, descuento: 1, latidos_necesarios: 100, color: '#FF9800', emoji: '🥖', bonos: '[]' });
-    await put('comercios', { id: 5, nombre: 'Farmacia Valsequillo', categoria: 'Farmacia', direccion: 'Av. de las Canarias, 45', lat: 28.0015, lon: -15.4130, descuento: 4, latidos_necesarios: 400, color: '#2196F3', emoji: '💊', bonos: '[{"titulo":"Bono Salud","descripcion":"Vitamina C gratis con compra +10€"}]' });
+    await put('comercios', { id: 1, nombre: 'Cafetería El Guiniguada', categoria: 'Cafetería', direccion: 'C/ León y Castillo, 14', lat: 28.0034, lon: -15.4144, descuento: 2, latidos_necesarios: 200, color: '#B6737F', emoji: '☕', bonos: '[]', horario: defaultHorarioStandard, vacaciones: { activo: false, inicio: '', fin: '', mensaje: '' }, aviso: '¡Disfruta de nuestros desayunos artesanales!', telefono: '928 69 12 34', email: 'hola@elguiniguada.com' });
+    await put('comercios', { id: 2, nombre: 'Frutería La Majorera', categoria: 'Frutería', direccion: 'Plaza de San Gregorio, 3', lat: 28.0048, lon: -15.4158, descuento: 3, latidos_necesarios: 300, color: '#4CAF50', emoji: '🍎', bonos: '[{"titulo":"Bono Fruta Fresca","descripcion":"1 kg de fruta gratis"}]', horario: defaultHorarioStandard, vacaciones: { activo: false, inicio: '', fin: '', mensaje: '' }, aviso: '¡Fruta de temporada recién llegada de Valsequillo!', telefono: '928 69 55 11', email: 'fruteria@latidos.app' });
+    await put('comercios', { id: 3, nombre: 'Moda Tara', categoria: 'Tienda de ropa', direccion: 'C/ Inés Chemida, 22', lat: 28.0021, lon: -15.4139, descuento: 5, latidos_necesarios: 500, color: '#9C27B0', emoji: '👗', bonos: '[{"titulo":"Rebajas Especiales","descripcion":"10% extra en toda la tienda"}]', horario: defaultHorarioStandard, vacaciones: { activo: false, inicio: '', fin: '', mensaje: '' }, aviso: 'Nueva colección de otoño ya disponible.', telefono: '928 69 88 22', email: 'contacto@modatara.es' });
+    await put('comercios', { id: 4, nombre: 'Panadería San Gregorio', categoria: 'Panadería', direccion: 'C/ Real de Telde, 8', lat: 28.0055, lon: -15.4162, descuento: 1, latidos_necesarios: 100, color: '#FF9800', emoji: '🥖', bonos: '[]', horario: { ...defaultHorarioStandard, domingo: '08:00 - 13:00' }, vacaciones: { activo: false, inicio: '', fin: '', mensaje: '' }, aviso: 'Pan caliente recién horneado a partir de las 08:00.', telefono: '928 69 33 00', email: 'panaderia@sangregorio.com' });
+    await put('comercios', { id: 5, nombre: 'Farmacia Valsequillo', categoria: 'Farmacia', direccion: 'Av. de las Canarias, 45', lat: 28.0015, lon: -15.4130, descuento: 4, latidos_necesarios: 400, color: '#2196F3', emoji: '💊', bonos: '[{"titulo":"Bono Salud","descripcion":"Vitamina C gratis con compra +10€"}]', horario: { ...defaultHorarioStandard, sabado: '09:00 - 14:00, 17:00 - 20:00' }, vacaciones: { activo: false, inicio: '', fin: '', mensaje: '' }, aviso: 'Servicio de guardia 24h los viernes.', telefono: '928 69 44 77', email: 'farmacia@valsequillo.es' });
+  } else {
+    // Ensure all existing comercios have default horario/vacaciones/aviso/telefono/email
+    for (const c of comercios) {
+      let changed = false;
+      if (!c.horario) { c.horario = defaultHorarioStandard; changed = true; }
+      if (!c.vacaciones) { c.vacaciones = { activo: false, inicio: '', fin: '', mensaje: '' }; changed = true; }
+      if (c.aviso === undefined) { c.aviso = ''; changed = true; }
+      if (c.telefono === undefined) { c.telefono = ''; changed = true; }
+      if (c.email === undefined) { c.email = ''; changed = true; }
+      if (changed) await put('comercios', c);
+    }
   }
 
   // Repair any existing transactions with missing or invalid fecha

@@ -59,11 +59,20 @@ const Login = () => {
     }
   };
 
-  const handleDemoLogin = async () => {
+  const handleQuickLogin = async (eEmail, ePassword) => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 400));
-    await login();
-    navigate('/');
+    setError('');
+    try {
+      await loginUser(eEmail, ePassword);
+      navigate('/');
+    } catch (err) {
+      setError(err.message);
+      setIsLoading(false);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    handleQuickLogin('usuario@latidos.app', 'demo123');
   };
 
   const InputStyle = {
@@ -240,50 +249,6 @@ const Login = () => {
           {isRegistering ? 'Inicia sesión' : 'Regístrate'}
         </span>
       </p>
-
-      {/* Divider */}
-      <div style={{
-        width: '100%', maxWidth: '320px',
-        height: '1px', backgroundColor: 'var(--color-border)',
-        marginBottom: '2rem', position: 'relative'
-      }}>
-        <span style={{
-          position: 'absolute', top: '50%', left: '50%',
-          transform: 'translate(-50%, -50%)',
-          backgroundColor: 'var(--color-primary)', // Background color to mask line
-          padding: '0 0.8rem',
-          color: 'var(--color-text-muted)',
-          fontSize: '0.8rem',
-          fontFamily: 'var(--font-main)'
-        }}>O accede directamente</span>
-      </div>
-
-      {/* Demo Shortcut */}
-      <button
-        onClick={handleDemoLogin}
-        disabled={isLoading}
-        style={{
-          backgroundColor: 'transparent',
-          color: 'var(--color-text)',
-          border: '1px solid var(--color-border)',
-          padding: '0.9rem',
-          borderRadius: '2rem',
-          fontSize: '0.9rem',
-          fontWeight: '500',
-          fontFamily: 'var(--font-main)',
-          width: '100%',
-          maxWidth: '320px',
-          cursor: isLoading ? 'wait' : 'pointer',
-          opacity: isLoading ? 0.5 : 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '0.5rem'
-        }}
-      >
-        <span style={{ fontSize: '1.2rem' }}>🚀</span>
-        Entrar con la cuenta Demo
-      </button>
 
     </div>
   );

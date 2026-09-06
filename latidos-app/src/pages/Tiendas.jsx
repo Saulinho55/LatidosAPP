@@ -46,12 +46,78 @@ const MapFlyTo = ({ position, zoom }) => {
 const CODE_VALIDITY_SECONDS = 600;
 const generateCode = () => `LAT-${Math.floor(1000 + Math.random() * 9000)}`;
 
+const DIAS_KEYS = [
+  { key: 'lunes', label: 'Lunes' },
+  { key: 'martes', label: 'Martes' },
+  { key: 'miercoles', label: 'Miércoles' },
+  { key: 'jueves', label: 'Jueves' },
+  { key: 'viernes', label: 'Viernes' },
+  { key: 'sabado', label: 'Sábado' },
+  { key: 'domingo', label: 'Domingo' }
+];
+
+const isShopOnVacation = (comercio) => {
+  if (!comercio?.vacaciones) return false;
+  let vac = comercio.vacaciones;
+  if (typeof vac === 'string') {
+    try { vac = JSON.parse(vac); } catch (e) { return false; }
+  }
+  if (!vac) return false;
+  if (vac.activo) return true;
+  if (vac.inicio && vac.fin) {
+    const today = new Date().toISOString().slice(0, 10);
+    return today >= vac.inicio && today <= vac.fin;
+  }
+  return false;
+};
+
+const getActiveNotice = (comercio) => {
+  if (!comercio?.aviso) return null;
+  let av = comercio.aviso;
+  if (typeof av === 'string' && (av.trim().startsWith('{') || av.trim().startsWith('['))) {
+    try { av = JSON.parse(av); } catch (e) {}
+  }
+  if (typeof av === 'string') {
+    return av.trim() ? { texto: av.trim() } : null;
+  }
+  if (typeof av === 'object' && av !== null) {
+    if (av.activo === false) return null;
+    const texto = (av.texto || '').trim();
+    if (!texto) return null;
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (av.inicio && today < av.inicio) return null;
+    if (av.fin && today > av.fin) return null;
+
+    return {
+      texto,
+      inicio: av.inicio || '',
+      fin: av.fin || ''
+    };
+  }
+  return null;
+};
+
 const ComercioModal = ({ comercio, onClose, latidos, activeCode, onGenerarCodigo, onCancelarCodigo, isAuthenticated, user, onTrazarRuta, tr }) => {
   const [error, setError] = useState('');
   const [selectedBonoIndex, setSelectedBonoIndex] = useState(comercio?.bonos?.length > 0 ? 0 : -1);
+  const [showFullSchedule, setShowFullSchedule] = useState(false);
 
   const isThisCommerceActive = activeCode && activeCode.comercioNombre === comercio.nombre;
   const hasOtherActiveCode = activeCode && !isThisCommerceActive;
+
+  // Safe parsing of horario and vacaciones in case raw JSON strings are passed
+  let parsedHorario = comercio?.horario;
+  if (typeof parsedHorario === 'string') {
+    try { parsedHorario = JSON.parse(parsedHorario); } catch(e) { parsedHorario = {}; }
+  }
+  parsedHorario = parsedHorario || {};
+
+  let parsedVacaciones = comercio?.vacaciones;
+  if (typeof parsedVacaciones === 'string') {
+    try { parsedVacaciones = JSON.parse(parsedVacaciones); } catch(e) { parsedVacaciones = {}; }
+  }
+  parsedVacaciones = parsedVacaciones || {};
 
   const [secondsLeft, setSecondsLeft] = useState(0);
   useEffect(() => {
@@ -63,6 +129,11 @@ const ComercioModal = ({ comercio, onClose, latidos, activeCode, onGenerarCodigo
   }, [isThisCommerceActive, activeCode]);
 
   if (!comercio) return null;
+
+  const onVacation = isShopOnVacation(comercio);
+  const todayKey = DIAS_KEYS[(new Date().getDay() + 6) % 7].key;
+  const todayLabel = DIAS_KEYS[(new Date().getDay() + 6) % 7].label;
+  const todaySchedule = parsedHorario[todayKey] || null;
 
   const bonoActual = selectedBonoIndex >= 0 ? comercio.bonos[selectedBonoIndex] : { coste: comercio.latidosNecesarios, descuento: comercio.descuento, titulo: 'Bono por defecto' };
   const latidosRequeridos = bonoActual.coste !== undefined ? parseInt(bonoActual.coste, 10) : comercio.latidosNecesarios;
@@ -107,6 +178,8 @@ const ComercioModal = ({ comercio, onClose, latidos, activeCode, onGenerarCodigo
         transform: 'translateX(-50%)',
         width: '100%',
         maxWidth: '500px',
+        maxHeight: '88vh',
+        overflowY: 'auto',
         backgroundColor: 'var(--color-white)',
         borderRadius: '1.5rem 1.5rem 0 0',
         padding: '1.5rem 1.5rem 2.5rem',
@@ -123,7 +196,7 @@ const ComercioModal = ({ comercio, onClose, latidos, activeCode, onGenerarCodigo
         }} />
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.8rem' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
               <span style={{ fontSize: '1.4rem' }}>{comercio.emoji}</span>
@@ -136,17 +209,31 @@ const ComercioModal = ({ comercio, onClose, latidos, activeCode, onGenerarCodigo
                 {comercio.nombre}
               </h2>
             </div>
-            <span style={{
-              fontSize: '0.75rem',
-              color: 'white',
-              backgroundColor: comercio.color,
-              padding: '0.2rem 0.6rem',
-              borderRadius: '1rem',
-              fontFamily: 'var(--font-main)',
-              fontWeight: '500'
-            }}>
-              {comercio.categoria}
-            </span>
+            <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{
+                fontSize: '0.75rem',
+                color: 'white',
+                backgroundColor: comercio.color,
+                padding: '0.2rem 0.6rem',
+                borderRadius: '1rem',
+                fontFamily: 'var(--font-main)',
+                fontWeight: '500'
+              }}>
+                {comercio.categoria}
+              </span>
+              {onVacation && (
+                <span style={{
+                  fontSize: '0.72rem',
+                  backgroundColor: '#fee2e2',
+                  color: '#b91c1c',
+                  padding: '0.2rem 0.5rem',
+                  borderRadius: '1rem',
+                  fontWeight: '700'
+                }}>
+                  🏖️ De vacaciones
+                </span>
+              )}
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -162,7 +249,7 @@ const ComercioModal = ({ comercio, onClose, latidos, activeCode, onGenerarCodigo
         {/* Address */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: '0.4rem',
-          marginBottom: '1.2rem',
+          marginBottom: (comercio.telefono || comercio.email) ? '0.6rem' : '1rem',
           color: 'var(--color-detail)',
           fontSize: '0.88rem',
           fontFamily: 'var(--font-main)'
@@ -171,6 +258,171 @@ const ComercioModal = ({ comercio, onClose, latidos, activeCode, onGenerarCodigo
           <span>{comercio.direccion}</span>
         </div>
 
+        {/* Contact buttons if present */}
+        {(comercio.telefono || comercio.email) && (
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            {comercio.telefono && comercio.telefono.trim() !== '' && (
+              <a
+                href={`tel:${comercio.telefono.replace(/\s+/g, '')}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  backgroundColor: '#ecfdf5',
+                  border: '1.5px solid #a7f3d0',
+                  color: '#047857',
+                  fontSize: '0.78rem',
+                  fontWeight: '700',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '1.2rem',
+                  textDecoration: 'none',
+                  fontFamily: 'var(--font-main)'
+                }}
+              >
+                <span>📞</span>
+                <span>Llamar ({comercio.telefono})</span>
+              </a>
+            )}
+
+            {comercio.email && comercio.email.trim() !== '' && (
+              <a
+                href={`mailto:${comercio.email}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  backgroundColor: '#eff6ff',
+                  border: '1.5px solid #bfdbfe',
+                  color: '#1d4ed8',
+                  fontSize: '0.78rem',
+                  fontWeight: '700',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '1.2rem',
+                  textDecoration: 'none',
+                  fontFamily: 'var(--font-main)'
+                }}
+              >
+                <span>✉️</span>
+                <span>Email ({comercio.email})</span>
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* ── BANNER DE VACACIONES ── */}
+        {onVacation && (
+          <div style={{
+            backgroundColor: '#fef2f2',
+            border: '1.5px solid #fca5a5',
+            borderRadius: '0.9rem',
+            padding: '0.8rem 1rem',
+            marginBottom: '1rem',
+            display: 'flex',
+            gap: '0.6rem',
+            alignItems: 'flex-start'
+          }}>
+            <span style={{ fontSize: '1.4rem' }}>🏖️</span>
+            <div>
+              <p style={{ fontWeight: '700', fontSize: '0.88rem', color: '#b91c1c', margin: '0 0 0.2rem', fontFamily: 'var(--font-main)' }}>
+                Este negocio está de vacaciones
+              </p>
+              <p style={{ fontSize: '0.82rem', color: '#991b1b', margin: 0, lineHeight: '1.4', fontFamily: 'var(--font-main)' }}>
+                {parsedVacaciones?.mensaje || (parsedVacaciones?.inicio && parsedVacaciones?.fin ? `Cerrado por vacaciones del ${parsedVacaciones.inicio} al ${parsedVacaciones.fin}.` : 'Cerrado temporalmente por descanso.')}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── BANNER DE AVISO ESPECIAL ── */}
+        {(() => {
+          const activeNotice = getActiveNotice(comercio);
+          if (!activeNotice) return null;
+          return (
+            <div style={{
+              backgroundColor: '#fefce8',
+              border: '1.5px solid #fde047',
+              borderRadius: '0.9rem',
+              padding: '0.8rem 1rem',
+              marginBottom: '1rem',
+              display: 'flex',
+              gap: '0.6rem',
+              alignItems: 'flex-start'
+            }}>
+              <span style={{ fontSize: '1.3rem' }}>📢</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.15rem' }}>
+                  <p style={{ fontWeight: '700', fontSize: '0.85rem', color: '#854d0e', margin: 0, fontFamily: 'var(--font-main)' }}>
+                    Aviso del comercio
+                  </p>
+                  {activeNotice.fin && (
+                    <span style={{ fontSize: '0.68rem', backgroundColor: '#fef08a', color: '#854d0e', padding: '0.1rem 0.4rem', borderRadius: '1rem', fontWeight: '600' }}>
+                      {activeNotice.inicio ? `${activeNotice.inicio} al ${activeNotice.fin}` : `Hasta el ${activeNotice.fin}`}
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontSize: '0.82rem', color: '#713f12', margin: 0, lineHeight: '1.4', fontFamily: 'var(--font-main)' }}>
+                  {activeNotice.texto}
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── SECCIÓN HORARIOS ── */}
+        {Object.keys(parsedHorario).length > 0 && (
+          <div style={{
+            backgroundColor: 'var(--color-card-alt)',
+            borderRadius: '0.9rem',
+            padding: '0.8rem 1rem',
+            marginBottom: '1.2rem',
+            border: '1px solid var(--color-border)'
+          }}>
+            <div
+              onClick={() => setShowFullSchedule(!showFullSchedule)}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '1.1rem' }}>🕒</span>
+                <div>
+                  <p style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--color-text)', margin: 0, fontFamily: 'var(--font-main)' }}>
+                    Horario de hoy ({todayLabel}):
+                  </p>
+                  <p style={{ fontSize: '0.78rem', color: todaySchedule === 'Cerrado' ? '#ef4444' : 'var(--color-text-muted)', margin: '0.1rem 0 0', fontFamily: 'var(--font-main)', fontWeight: '600' }}>
+                    {todaySchedule || 'Consultar en tienda'}
+                  </p>
+                </div>
+              </div>
+              <span style={{ fontSize: '0.75rem', color: 'var(--color-accent)', fontWeight: '700', fontFamily: 'var(--font-main)' }}>
+                {showFullSchedule ? 'Ocultar ▲' : 'Ver semana ▼'}
+              </span>
+            </div>
+
+            {showFullSchedule && (
+              <div style={{ marginTop: '0.8rem', borderTop: '1px solid var(--color-border)', paddingTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                {DIAS_KEYS.map(({ key, label }) => {
+                  const isCurrentDay = key === todayKey;
+                  const dayVal = parsedHorario[key] || 'Cerrado';
+                  return (
+                    <div key={key} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: '0.78rem',
+                      padding: '0.25rem 0.4rem',
+                      borderRadius: '0.4rem',
+                      backgroundColor: isCurrentDay ? 'rgba(94,0,14,0.08)' : 'transparent',
+                      fontWeight: isCurrentDay ? '700' : '400',
+                      color: isCurrentDay ? 'var(--color-accent)' : 'var(--color-text)',
+                      fontFamily: 'var(--font-main)'
+                    }}>
+                      <span>{label}</span>
+                      <span style={{ color: dayVal === 'Cerrado' ? '#ef4444' : 'inherit' }}>{dayVal}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Discount info (only if no custom bonos) */}
         {(!comercio.bonos || comercio.bonos.length === 0) && (
@@ -194,7 +446,7 @@ const ComercioModal = ({ comercio, onClose, latidos, activeCode, onGenerarCodigo
             {comercio.bonos.map((bono, i) => (
               <div 
                 key={i} 
-                onClick={() => !code && setSelectedBonoIndex(i)}
+                onClick={() => !activeCode && setSelectedBonoIndex(i)}
                 style={{
                 backgroundColor: selectedBonoIndex === i ? '#fff8e1' : 'transparent',
                 border: selectedBonoIndex === i ? '1.5px solid #ffe082' : '1px solid var(--color-border)',
@@ -204,8 +456,8 @@ const ComercioModal = ({ comercio, onClose, latidos, activeCode, onGenerarCodigo
                 display: 'flex',
                 gap: '0.5rem',
                 alignItems: 'flex-start',
-                cursor: code ? 'default' : 'pointer',
-                opacity: code && selectedBonoIndex !== i ? 0.4 : 1
+                cursor: activeCode ? 'default' : 'pointer',
+                opacity: activeCode && selectedBonoIndex !== i ? 0.4 : 1
               }}>
                 <span>🎁</span>
                 <div>
@@ -753,23 +1005,50 @@ const Tiendas = () => {
               </span>
             </div>
 
-            {/* Active bonuses badge */}
-            {c.bonos.length > 0 && (
-              <span style={{
-                display: 'inline-block',
-                marginTop: '0.4rem',
-                backgroundColor: '#fff8e1',
-                border: '1px solid #ffe082',
-                color: '#795548',
-                fontSize: '0.7rem',
-                fontFamily: 'var(--font-main)',
-                fontWeight: '600',
-                padding: '0.15rem 0.5rem',
-                borderRadius: '1rem'
-              }}>
-                🎁 {c.bonos.length} bono{c.bonos.length > 1 ? 's' : ''} activo{c.bonos.length > 1 ? 's' : ''}
-              </span>
-            )}
+            {/* Badges row */}
+            <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
+              {isShopOnVacation(c) && (
+                <span style={{
+                  backgroundColor: '#fee2e2',
+                  border: '1px solid #fca5a5',
+                  color: '#b91c1c',
+                  fontSize: '0.7rem',
+                  fontWeight: '700',
+                  padding: '0.15rem 0.5rem',
+                  borderRadius: '1rem'
+                }}>
+                  🏖️ De vacaciones
+                </span>
+              )}
+
+              {getActiveNotice(c) && (
+                <span style={{
+                  backgroundColor: '#fef3c7',
+                  border: '1px solid #fde047',
+                  color: '#92400e',
+                  fontSize: '0.7rem',
+                  fontWeight: '700',
+                  padding: '0.15rem 0.5rem',
+                  borderRadius: '1rem'
+                }}>
+                  📢 Aviso
+                </span>
+              )}
+
+              {c.bonos && c.bonos.length > 0 && (
+                <span style={{
+                  backgroundColor: '#fff8e1',
+                  border: '1px solid #ffe082',
+                  color: '#795548',
+                  fontSize: '0.7rem',
+                  fontWeight: '600',
+                  padding: '0.15rem 0.5rem',
+                  borderRadius: '1rem'
+                }}>
+                  🎁 {c.bonos.length} bono{c.bonos.length > 1 ? 's' : ''} disponible{c.bonos.length > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
           </button>
         ))}
       </div>

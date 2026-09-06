@@ -35,6 +35,11 @@ const initialSchema = `
     color            TEXT    NOT NULL,
     emoji            TEXT    NOT NULL,
     bonos            TEXT    DEFAULT '[]',
+    horario          TEXT    DEFAULT '{}',
+    vacaciones       TEXT    DEFAULT '{}',
+    aviso            TEXT    DEFAULT '',
+    telefono         TEXT    DEFAULT '',
+    email            TEXT    DEFAULT '',
     created_at       TEXT    DEFAULT (datetime('now', 'localtime'))
   );
 
@@ -104,6 +109,15 @@ export const initDB = async () => {
     }
     await db.open();
     await db.execute(initialSchema);
+
+    // Schema migrations for existing tables
+    try { await db.run('ALTER TABLE comercios ADD COLUMN horario TEXT DEFAULT "{}"'); } catch (e) {}
+    try { await db.run('ALTER TABLE comercios ADD COLUMN vacaciones TEXT DEFAULT "{}"'); } catch (e) {}
+    try { await db.run('ALTER TABLE comercios ADD COLUMN aviso TEXT DEFAULT ""'); } catch (e) {}
+    try { await db.run('ALTER TABLE comercios ADD COLUMN telefono TEXT DEFAULT ""'); } catch (e) {}
+    try { await db.run('ALTER TABLE comercios ADD COLUMN email TEXT DEFAULT ""'); } catch (e) {}
+    try { await db.run('ALTER TABLE users ADD COLUMN comercio_id INTEGER DEFAULT NULL'); } catch (e) {}
+
     await seedDB();
   } catch (err) {
     console.error("Error inicializando BD:", err);
@@ -127,6 +141,13 @@ const seedDB = async () => {
       await db.run(`INSERT INTO users (email, password, name, role, comercio_id) VALUES ('fruteria@latidos.app', 'demo123', 'Frutería La Majorera', 'comercio', 2)`);
       const newF = await db.query('SELECT id FROM users WHERE email = ?', ['fruteria@latidos.app']);
       await db.run(`INSERT INTO preferences (user_id, theme) VALUES (?, 'light')`, [newF.values[0].id]);
+    }
+
+    const superRes = await db.query('SELECT count(*) as count FROM users WHERE email = ?', ['superadmin@latidos.app']);
+    if (superRes.values[0].count === 0) {
+      await db.run(`INSERT INTO users (email, password, name, latidos, racha, role) VALUES ('superadmin@latidos.app', 'super123', 'Super Administrador', 9999, 10, 'superadmin')`);
+      const newS = await db.query('SELECT id FROM users WHERE email = ?', ['superadmin@latidos.app']);
+      await db.run(`INSERT INTO preferences (user_id, theme) VALUES (?, 'dark')`, [newS.values[0].id]);
     }
 
     const comerciosRes = await db.query('SELECT count(*) as count FROM comercios');

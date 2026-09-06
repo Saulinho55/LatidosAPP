@@ -44,10 +44,10 @@ export const LatidosProvider = ({ children }) => {
       setIsAuthenticated(true);
       setUserId(parseInt(savedUserId, 10));
     } else {
-      // Default to demo user (id: 1) on initial launch
-      setIsAuthenticated(true);
-      setUserId(1);
-      localStorage.setItem('latidos_user_id', '1');
+      setIsAuthenticated(false);
+      setUserId(null);
+      setUser(null);
+      setLoading(false);
     }
   }, [dbReady]);
 
@@ -75,6 +75,7 @@ export const LatidosProvider = ({ children }) => {
         const p = (prefRes.values && prefRes.values.length > 0) ? prefRes.values[0] : {};
 
         setUser({ 
+          id: u.id,
           name: u.name,
           email: u.email,
           role: u.role || 'user',
@@ -411,10 +412,50 @@ export const LatidosProvider = ({ children }) => {
     const db = getDB();
     if (!db) return [];
     try {
-      const res = await db.query('SELECT id, email, name, role, latidos, steps_today, racha, created_at FROM users ORDER BY created_at DESC');
+      const res = await db.query('SELECT id, email, name, role, latidos, steps_today, racha, comercio_id, created_at FROM users ORDER BY created_at DESC');
       return res.values || [];
     } catch (e) {
       console.error(e); return [];
+    }
+  };
+
+  const createUser = async (userData) => {
+    const db = getDB();
+    if (!db) return { success: false, error: 'Base de datos no disponible' };
+    try {
+      const cleanEmail = userData.email.trim().toLowerCase();
+      const existing = await db.query('SELECT id FROM users WHERE email = ?', [cleanEmail]);
+      if (existing.values && existing.values.length > 0) {
+        return { success: false, error: 'El correo electrónico ya está registrado.' };
+      }
+
+      let role = userData.role || 'user';
+      if (role === 'superadmin' && user?.role !== 'superadmin') {
+        return { success: false, error: 'Solo un SuperAdministrador puede crear cuentas SuperAdministrador.' };
+      }
+
+      const password = userData.password || 'demo123';
+      const name = userData.name || 'Usuario';
+      const latidosInit = parseInt(userData.latidos, 10) || 0;
+      const stepsInit = parseInt(userData.steps_today, 10) || 0;
+      const rachaInit = parseInt(userData.racha, 10) || 0;
+      const comercioId = userData.comercio_id ? parseInt(userData.comercio_id, 10) : null;
+
+      await db.run(
+        `INSERT INTO users (name, email, password, role, latidos, steps_today, racha, comercio_id, weekly_steps, daily_goal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[0,0,0,0,0,0,0]', 10000)`,
+        [name, cleanEmail, password, role, latidosInit, stepsInit, rachaInit, comercioId]
+      );
+
+      const userRes = await db.query('SELECT id FROM users WHERE email = ?', [cleanEmail]);
+      if (userRes.values && userRes.values.length > 0) {
+        const newId = userRes.values[0].id;
+        await db.run('INSERT INTO preferences (user_id, theme, language, currency) VALUES (?, ?, ?, ?)', [newId, 'light', 'es', 'EUR']);
+      }
+
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
     }
   };
 
@@ -424,11 +465,25 @@ export const LatidosProvider = ({ children }) => {
     try {
       const res = await db.query('SELECT * FROM comercios');
       if (res.values) {
-        return res.values.map(c => ({
-          ...c,
-          bonos: c.bonos ? JSON.parse(c.bonos) : [],
-          latidosNecesarios: c.latidos_necesarios
-        }));
+        return res.values.map(c => {
+          let parsedBonos = [];
+          let parsedHorario = {};
+          let parsedVacaciones = {};
+          try { parsedBonos = typeof c.bonos === 'string' ? JSON.parse(c.bonos) : (c.bonos || []); } catch (e) { parsedBonos = []; }
+          try { parsedHorario = typeof c.horario === 'string' ? JSON.parse(c.horario) : (c.horario || {}); } catch (e) { parsedHorario = {}; }
+          try { parsedVacaciones = typeof c.vacaciones === 'string' ? JSON.parse(c.vacaciones) : (c.vacaciones || {}); } catch (e) { parsedVacaciones = {}; }
+          
+          return {
+            ...c,
+            bonos: parsedBonos,
+            horario: parsedHorario,
+            vacaciones: parsedVacaciones,
+            aviso: c.aviso || '',
+            telefono: c.telefono || '',
+            email: c.email || '',
+            latidosNecesarios: c.latidos_necesarios || c.latidosNecesarios
+          };
+        });
       }
       return [];
     } catch (e) {
@@ -468,24 +523,64 @@ export const LatidosProvider = ({ children }) => {
 
   const updateUser = async (id, userData) => {
     const db = getDB();
-    if (!db) return false;
+    if (!db) return { success: false, error: 'Base de datos no disponible' };
     try {
-      await db.run(`UPDATE users SET name = ?, email = ?, role = ?, latidos = ?, steps_today = ?, racha = ? WHERE id = ?`,
-         [userData.name, userData.email, userData.role, parseInt(userData.latidos, 10) || 0, parseInt(userData.steps_today, 10) || 0, parseInt(userData.racha, 10) || 0, id]);
-      return true;
-    } catch (e) { console.error(e); return false; }
+      const targetRes = await db.query('SELECT role FROM users WHERE id = ?', [id]);
+      if (!targetRes.values || targetRes.values.length === 0) {
+        return { success: false, error: 'Usuario no encontrado' };
+      }
+      const targetUser = targetRes.values[0];
+
+      // SuperAdmin is untouchable by regular admins
+      if (targetUser.role === 'superadmin' && user?.role !== 'superadmin') {
+        return { success: false, error: 'Los administradores no pueden modificar a un SuperAdministrador.' };
+      }
+
+      // Only superadmin can promote someone to superadmin
+      if (userData.role === 'superadmin' && user?.role !== 'superadmin') {
+        return { success: false, error: 'Solo un SuperAdministrador puede otorgar el rol de SuperAdministrador.' };
+      }
+
+      const comercioId = userData.comercio_id ? parseInt(userData.comercio_id, 10) : null;
+
+      await db.run(`UPDATE users SET name = ?, email = ?, role = ?, latidos = ?, steps_today = ?, racha = ?, comercio_id = ? WHERE id = ?`,
+         [userData.name, userData.email, userData.role, parseInt(userData.latidos, 10) || 0, parseInt(userData.steps_today, 10) || 0, parseInt(userData.racha, 10) || 0, comercioId, id]);
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
   };
 
   const deleteUser = async (id) => {
     const db = getDB();
-    if (!db) return false;
+    if (!db) return { success: false, error: 'Base de datos no disponible' };
     try {
+      const targetRes = await db.query('SELECT role FROM users WHERE id = ?', [id]);
+      if (!targetRes.values || targetRes.values.length === 0) {
+        return { success: false, error: 'Usuario no encontrado' };
+      }
+      const targetUser = targetRes.values[0];
+
+      // SuperAdmin cannot be deleted by regular admins
+      if (targetUser.role === 'superadmin' && user?.role !== 'superadmin') {
+        return { success: false, error: 'Los administradores no pueden eliminar a un SuperAdministrador.' };
+      }
+
+      if (id === userId) {
+        return { success: false, error: 'No puedes eliminar tu propia cuenta mientras estás conectado.' };
+      }
+
       await db.run('DELETE FROM preferences WHERE user_id = ?', [id]);
       await db.run('DELETE FROM routes WHERE user_id = ?', [id]);
       await db.run('DELETE FROM transactions WHERE user_id = ?', [id]);
+      await db.run('DELETE FROM activity WHERE user_id = ?', [id]);
       await db.run('DELETE FROM users WHERE id = ?', [id]);
-      return true;
-    } catch (e) { console.error(e); return false; }
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
   };
 
   // ── Auth & Rutas ──
@@ -525,6 +620,7 @@ export const LatidosProvider = ({ children }) => {
     localStorage.setItem('latidos_user_id', id.toString());
     setUserId(id);
     setIsAuthenticated(true);
+    fetchData(id);
   };
 
   const logout = () => {
@@ -635,6 +731,35 @@ export const LatidosProvider = ({ children }) => {
     } catch (e) { return false; }
   };
 
+  const updateComercioHorarios = async (comercioId, { horario, vacaciones, aviso, telefono, email }) => {
+    const db = getDB();
+    const targetId = Number(comercioId || user?.comercio_id || 2);
+    if (!db) return false;
+    try {
+      const hVal = typeof horario === 'string' ? horario : JSON.stringify(horario || {});
+      const vVal = typeof vacaciones === 'string' ? vacaciones : JSON.stringify(vacaciones || {});
+      const aVal = typeof aviso === 'string' ? aviso : (aviso || '');
+      const telVal = telefono !== undefined ? telefono : '';
+      const emailVal = email !== undefined ? email : '';
+      
+      try {
+        await db.run('UPDATE comercios SET horario = ?, vacaciones = ?, aviso = ?, telefono = ?, email = ? WHERE id = ?', [hVal, vVal, aVal, telVal, emailVal, targetId]);
+      } catch (colErr) {
+        console.warn('Attempting SQLite migration fallback for comercios columns:', colErr);
+        try { await db.run('ALTER TABLE comercios ADD COLUMN horario TEXT DEFAULT "{}"'); } catch (e) {}
+        try { await db.run('ALTER TABLE comercios ADD COLUMN vacaciones TEXT DEFAULT "{}"'); } catch (e) {}
+        try { await db.run('ALTER TABLE comercios ADD COLUMN aviso TEXT DEFAULT ""'); } catch (e) {}
+        try { await db.run('ALTER TABLE comercios ADD COLUMN telefono TEXT DEFAULT ""'); } catch (e) {}
+        try { await db.run('ALTER TABLE comercios ADD COLUMN email TEXT DEFAULT ""'); } catch (e) {}
+        await db.run('UPDATE comercios SET horario = ?, vacaciones = ?, aviso = ?, telefono = ?, email = ? WHERE id = ?', [hVal, vVal, aVal, telVal, emailVal, targetId]);
+      }
+      return true;
+    } catch (e) {
+      console.error('Error updating comercio info:', e);
+      return false;
+    }
+  };
+
   // ── Activity History ──
   const registrarActividad = async (pasos, latidosGanados) => {
     const db = getDB();
@@ -669,8 +794,9 @@ export const LatidosProvider = ({ children }) => {
       ganarLatidos, canjearLatidos, updateSteps, updateDailyGoal, registrarCanje,
       savePreferences, toggleTheme, setLanguage: changeLanguage, setCurrency: changeCurrency,
       saveRoute, deleteRoute, updateRoute, login, logout, loginUser, registerUser,
-      fetchAdminStats, fetchAdminUsers, fetchComercios, createComercio, updateComercio,
+      fetchAdminStats, fetchAdminUsers, createUser, fetchComercios, createComercio, updateComercio,
       deleteComercio, updateUser, deleteUser, validarBono, fetchComercioStats, updateComercioBonos,
+      updateComercioHorarios,
       registrarActividad
     }}>
       {children}

@@ -18,7 +18,9 @@ import ComercioLayout from './pages/comercio/ComercioLayout';
 import ComercioHoy from './pages/comercio/ComercioHoy';
 import ComercioValidar from './pages/comercio/ComercioValidar';
 import ComercioBonos from './pages/comercio/ComercioBonos';
+import ComercioHorario from './pages/comercio/ComercioHorario';
 import ComercioInforme from './pages/comercio/ComercioInforme';
+import SplashScreen from './components/SplashScreen';
 
 const PermissionsModal = () => {
   const [show, setShow] = useState(false);
@@ -76,6 +78,7 @@ function App() {
           minHeight: '100vh',
           position: 'relative'
         }}>
+          <SplashScreen minDuration={2800} />
           <PermissionsModal />
           <Routes>
             <Route path="/" element={<Home />} />
@@ -96,6 +99,7 @@ function App() {
               <Route index element={<ComercioHoy />} />
               <Route path="validar" element={<ComercioValidar />} />
               <Route path="bonos" element={<ComercioBonos />} />
+              <Route path="horario" element={<ComercioHorario />} />
               <Route path="informe" element={<ComercioInforme />} />
             </Route>
           </Routes>
