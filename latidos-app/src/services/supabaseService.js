@@ -1,30 +1,35 @@
 import { supabase } from '../lib/supabase';
 
 /**
- * Service to handle direct Supabase CRUD operations.
- * Handles auto-increment ID generation and falls back gracefully.
+ * Service for direct Supabase CRUD operations.
+ * Pure server-side persistence with real-time support.
  */
 
 async function getNextId(table) {
-  const { data } = await supabase
-    .from(table)
-    .select('id')
-    .order('id', { ascending: false })
-    .limit(1);
+  try {
+    const { data } = await supabase
+      .from(table)
+      .select('id')
+      .order('id', { ascending: false })
+      .limit(1);
 
-  if (data && data.length > 0 && typeof data[0].id === 'number') {
-    return data[0].id + 1;
+    if (data && data.length > 0 && typeof data[0].id === 'number') {
+      return data[0].id + 1;
+    }
+    return 1;
+  } catch (e) {
+    return Date.now();
   }
-  return 1;
 }
 
 export const supabaseService = {
   // ── Auth & Users ──
   async login(email, password) {
+    const cleanEmail = email.trim().toLowerCase();
     const { data, error } = await supabase
       .from('users')
       .select('*')
-      .eq('email', email.trim().toLowerCase())
+      .eq('email', cleanEmail)
       .eq('password', password)
       .maybeSingle();
 
@@ -34,6 +39,7 @@ export const supabaseService = {
 
   async registerUser(userData) {
     let payload = { ...userData };
+    payload.email = payload.email.trim().toLowerCase();
     if (!payload.id) {
       payload.id = await getNextId('users');
     }
@@ -45,7 +51,7 @@ export const supabaseService = {
       .single();
 
     if (error) {
-      // If collision, recalculate next ID and retry
+      // If ID collision, recalculate next ID and retry
       if (error.code === '23505') {
         const nextId = await getNextId('users');
         payload.id = nextId;
@@ -58,6 +64,7 @@ export const supabaseService = {
       }
       throw error;
     }
+
     try {
       await supabase.from('preferences').insert([{ user_id: data.id, theme: 'light', language: 'es', currency: 'EUR' }]);
     } catch (e) {}
@@ -88,7 +95,6 @@ export const supabaseService = {
   },
 
   async deleteUser(id) {
-    // Delete cascade records in Supabase
     await supabase.from('preferences').delete().eq('user_id', id);
     await supabase.from('routes').delete().eq('user_id', id);
     await supabase.from('transactions').delete().eq('user_id', id);
@@ -226,6 +232,17 @@ export const supabaseService = {
     return data || [];
   },
 
+  async getTransactionsByComercio(comercioNombre) {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('comercio_nombre', comercioNombre)
+      .order('id', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
   async addTransaction(tx) {
     let payload = { ...tx };
     if (!payload.id) {
@@ -262,6 +279,48 @@ export const supabaseService = {
     return data;
   },
 
+  async updateTransactionByCode(code, updates) {
+    const { data, error } = await supabase
+      .from('transactions')
+      .update(updates)
+      .eq('code', code)
+      .select()
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async validateBono(code, comercioId, importe) {
+    // Get comercio name
+    const { data: comercio } = await supabase
+      .from('comercios')
+      .select('nombre')
+      .eq('id', comercioId)
+      .maybeSingle();
+
+    if (!comercio) throw new Error('Comercio no encontrado');
+
+    const { data: tx, error: txErr } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('code', code)
+      .eq('comercio_nombre', comercio.nombre)
+      .maybeSingle();
+
+    if (txErr || !tx) throw new Error('Código no válido para este comercio');
+
+    const { data: updated, error: updateErr } = await supabase
+      .from('transactions')
+      .update({ importe_compra: parseFloat(importe) })
+      .eq('id', tx.id)
+      .select()
+      .single();
+
+    if (updateErr) throw updateErr;
+    return updated;
+  },
+
   // ── Routes ──
   async getRoutes(userId) {
     const { data, error } = await supabase
@@ -292,6 +351,24 @@ export const supabaseService = {
     };
 
     const { data, error } = await supabase.from('routes').insert([payload]).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async updateRoute(id, updatedData) {
+    const payload = {};
+    if (updatedData.name !== undefined) payload.name = updatedData.name;
+    if (updatedData.points !== undefined) {
+      payload.points = typeof updatedData.points === 'string' ? updatedData.points : JSON.stringify(updatedData.points || []);
+    }
+
+    const { data, error } = await supabase
+      .from('routes')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single();
+
     if (error) throw error;
     return data;
   },
@@ -343,5 +420,39 @@ export const supabaseService = {
       if (error) throw error;
       return data;
     }
+  },
+
+  // ── Admin Stats ──
+  async getAdminStats() {
+    const [usersRes, txRes] = await Promise.all([
+      supabase.from('users').select('*'),
+      supabase.from('transactions').select('*')
+    ]);
+
+    const users = usersRes.data || [];
+    const txs = txRes.data || [];
+
+    let totalLatidos = 0;
+    let totalSteps = 0;
+    users.forEach(u => {
+      totalLatidos += (u.latidos || 0);
+      totalSteps += (u.steps_today || 0);
+    });
+
+    let totalLatidosGastados = 0;
+    let totalDescuentos = 0;
+    txs.forEach(t => {
+      totalLatidosGastados += (t.latidos_usados || 0);
+      totalDescuentos += (t.descuento || 0);
+    });
+
+    return {
+      totalUsers: users.length,
+      totalLatidos,
+      totalSteps,
+      totalTransactions: txs.length,
+      totalLatidosGastados,
+      totalDescuentos
+    };
   }
 };

@@ -1,6 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Capacitor } from '@capacitor/core';
-import { initDB, getDB } from '../data/db';
 import { supabaseService } from '../services/supabaseService';
 import { t } from '../i18n';
 
@@ -16,7 +14,7 @@ export const LatidosProvider = ({ children }) => {
   const [savedRoutes, setSavedRoutes] = useState([]);
   const [activity, setActivity] = useState([]);
 
-  // Load preferences from localStorage immediately (fast cache)
+  // Preferences
   const [theme, setTheme] = useState(() => localStorage.getItem('pref_theme') || 'light');
   const [language, setLanguage] = useState(() => localStorage.getItem('pref_language') || 'es');
   const [currency, setCurrency] = useState(() => localStorage.getItem('pref_currency') || 'EUR');
@@ -25,52 +23,34 @@ export const LatidosProvider = ({ children }) => {
   const [userId, setUserId] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [dbReady, setDbReady] = useState(false);
 
-  // Initialize Local SQLite / IndexedDB Database
+  // Check saved session on start
   useEffect(() => {
-    const setup = async () => {
-      try {
-        await initDB();
-      } catch (e) {
-        console.error('Local DB init error:', e);
-      }
-      setDbReady(true);
-    };
-    setup();
-  }, []);
-
-  // Check auth
-  useEffect(() => {
-    if (!dbReady) return;
     const savedUserId = localStorage.getItem('latidos_user_id');
     if (savedUserId) {
+      const uid = parseInt(savedUserId, 10);
       setIsAuthenticated(true);
-      setUserId(parseInt(savedUserId, 10));
+      setUserId(uid);
+      fetchData(uid);
     } else {
       setIsAuthenticated(false);
       setUserId(null);
       setUser(null);
       setLoading(false);
     }
-  }, [dbReady]);
-
-  // Fetch data on auth
-  useEffect(() => {
-    if (isAuthenticated && userId && dbReady) {
-      fetchData(userId);
-    }
-  }, [isAuthenticated, userId, dbReady]);
+  }, []);
 
   const fetchData = async (uid) => {
-    setLoading(true);
-    let userLoaded = false;
+    if (!uid) {
+      setLoading(false);
+      return;
+    }
 
-    // 1. Try fetching from Supabase first
+    setLoading(true);
+
     try {
       const supaUser = await supabaseService.getUserById(uid);
       if (supaUser) {
-        userLoaded = true;
         setUser({
           id: supaUser.id,
           name: supaUser.name,
@@ -112,73 +92,15 @@ export const LatidosProvider = ({ children }) => {
         if (supaTx.status === 'fulfilled') setTransactions(supaTx.value);
         if (supaRoutes.status === 'fulfilled') setSavedRoutes(supaRoutes.value);
         if (supaAct.status === 'fulfilled') setActivity(supaAct.value);
+      } else {
+        // If user not found in Supabase (e.g. deleted from cloud)
+        logout();
       }
     } catch (supaErr) {
-      console.warn('Supabase fetch failed, falling back to local DB:', supaErr);
+      console.error('Error fetching data from Supabase:', supaErr);
+    } finally {
+      setLoading(false);
     }
-
-    // 2. Fallback to Local DB (or sync local DB if Supabase failed)
-    if (!userLoaded) {
-      const db = getDB();
-      if (db) {
-        try {
-          const userRes = await db.query('SELECT * FROM users WHERE id = ?', [uid]);
-          const prefRes = await db.query('SELECT * FROM preferences WHERE user_id = ?', [uid]);
-          const txRes = await db.query('SELECT * FROM transactions WHERE user_id = ? ORDER BY id DESC', [uid]);
-          const routesRes = await db.query('SELECT * FROM routes WHERE user_id = ? ORDER BY id DESC', [uid]);
-          const actRes = await db.query('SELECT * FROM activity WHERE user_id = ? ORDER BY fecha DESC', [uid]);
-
-          if (userRes.values && userRes.values.length > 0) {
-            const u = userRes.values[0];
-            const p = (prefRes.values && prefRes.values.length > 0) ? prefRes.values[0] : {};
-
-            setUser({
-              id: u.id,
-              name: u.name,
-              email: u.email,
-              role: u.role || 'user',
-              comercio_id: u.comercio_id
-            });
-            setLatidos(u.latidos || 0);
-            setSteps(u.steps_today || 0);
-            setRacha(u.racha || 0);
-            setDailyGoal(u.daily_goal || 10000);
-            setWeeklySteps(
-              typeof u.weekly_steps === 'string'
-                ? JSON.parse(u.weekly_steps || '[0,0,0,0,0,0,0]')
-                : (u.weekly_steps || [0,0,0,0,0,0,0])
-            );
-
-            const loadedTheme = p.theme || 'light';
-            const loadedLang = p.language || 'es';
-            const loadedCurr = p.currency || 'EUR';
-            setTheme(loadedTheme);
-            setLanguage(loadedLang);
-            setCurrency(loadedCurr);
-            localStorage.setItem('pref_theme', loadedTheme);
-            localStorage.setItem('pref_language', loadedLang);
-            localStorage.setItem('pref_currency', loadedCurr);
-          }
-
-          if (txRes.values) setTransactions(txRes.values);
-          if (routesRes.values) {
-            const parsedRoutes = routesRes.values.map(r => {
-              let p = [];
-              let pts = [];
-              try { p = typeof r.path === 'string' ? JSON.parse(r.path) : (r.path || []); } catch (e) { p = []; }
-              try { pts = typeof r.points === 'string' ? JSON.parse(r.points) : (r.points || []); } catch (e) { pts = []; }
-              return { ...r, path: p, points: pts };
-            });
-            setSavedRoutes(parsedRoutes);
-          }
-          if (actRes.values) setActivity(actRes.values);
-        } catch (localErr) {
-          console.error('Failed to fetch from local SQLite:', localErr);
-        }
-      }
-    }
-
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -190,11 +112,8 @@ export const LatidosProvider = ({ children }) => {
     if (num <= 0) return;
     setLatidos(prev => {
       const next = prev + num;
-      // Supabase update
       if (userId) {
         supabaseService.updateUser(userId, { latidos: next }).catch(console.error);
-        const db = getDB();
-        if (db) db.run('UPDATE users SET latidos = ? WHERE id = ?', [next, userId]).catch(console.error);
       }
       return next;
     });
@@ -207,8 +126,6 @@ export const LatidosProvider = ({ children }) => {
       const next = Math.max(0, prev - num);
       if (userId) {
         supabaseService.updateUser(userId, { latidos: next }).catch(console.error);
-        const db = getDB();
-        if (db) db.run('UPDATE users SET latidos = ? WHERE id = ?', [next, userId]).catch(console.error);
       }
       return next;
     });
@@ -219,43 +136,21 @@ export const LatidosProvider = ({ children }) => {
     setSteps(newSteps);
     if (!userId) return;
 
-    // Supabase update
     try {
       await supabaseService.updateUser(userId, { steps_today: newSteps });
+      const fecha = new Date().toISOString().slice(0, 10);
+      const updatedAct = await supabaseService.upsertActivity(userId, fecha, newSteps, 0);
+      if (updatedAct) {
+        setActivity(prev => {
+          const exists = prev.some(a => a.id === updatedAct.id);
+          if (exists) {
+            return prev.map(a => a.id === updatedAct.id ? updatedAct : a);
+          }
+          return [updatedAct, ...prev];
+        });
+      }
     } catch (e) {
-      console.warn('Supabase updateSteps failed, using local DB:', e);
-    }
-
-    const db = getDB();
-    if (db) {
-      try {
-        await db.run('UPDATE users SET steps_today = ? WHERE id = ?', [newSteps, userId]);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    const fecha = new Date().toISOString().slice(0, 10);
-    try {
-      await supabaseService.upsertActivity(userId, fecha, newSteps, 0);
-    } catch (e) {}
-
-    if (db) {
-      try {
-        const existing = await db.query('SELECT id, pasos, latidos_ganados FROM activity WHERE user_id = ? AND fecha = ?', [userId, fecha]);
-        if (existing.values && existing.values.length > 0) {
-          const row = existing.values[0];
-          const nextPasos = Math.max(row.pasos || 0, newSteps);
-          await db.run('UPDATE activity SET pasos = ? WHERE id = ?', [nextPasos, row.id]);
-          setActivity(prev => prev.map(a => a.id === row.id ? { ...a, pasos: nextPasos } : a));
-        } else {
-          await db.run('INSERT INTO activity (user_id, fecha, pasos, latidos_ganados) VALUES (?, ?, ?, 0)', [userId, fecha, newSteps]);
-          const newRec = await db.query('SELECT * FROM activity WHERE user_id = ? AND fecha = ?', [userId, fecha]);
-          if (newRec.values) setActivity(prev => [newRec.values[0], ...prev]);
-        }
-      } catch (e) {
-        console.error(e);
-      }
+      console.error('Error updating steps in Supabase:', e);
     }
   };
 
@@ -291,38 +186,30 @@ export const LatidosProvider = ({ children }) => {
       return;
     }
 
-    // Immediately remove from localStorage and state
     setActiveCode(null);
     localStorage.removeItem('latidos_active_code');
 
     const refundAmount = Number(currentCode.latidosUsados) || 0;
     const { code, txId, descuento } = currentCode;
 
-    if (refundAmount > 0) {
+    if (refundAmount > 0 && userId) {
       setLatidos(prev => {
         const next = prev + refundAmount;
-        if (userId) {
-          supabaseService.updateUser(userId, { latidos: next }).catch(console.error);
-          const db = getDB();
-          if (db) db.run('UPDATE users SET latidos = ? WHERE id = ?', [next, userId]).catch(console.error);
-        }
+        supabaseService.updateUser(userId, { latidos: next }).catch(console.error);
         return next;
       });
 
       const tag = reason === 'cancelled' ? '(Cancelado - Devuelto)' : '(Caducado - Devuelto)';
       if (txId) {
-        supabaseService.updateTransaction(txId, { descuento: `${descuento} ${tag}` }).catch(console.error);
-      }
-
-      const db = getDB();
-      if (db && userId) {
-        if (txId) {
-          await db.run('UPDATE transactions SET descuento = ? WHERE id = ?', [`${descuento} ${tag}`, txId]).catch(() => {});
-        } else if (code) {
-          await db.run('UPDATE transactions SET descuento = ? WHERE code = ?', [`${descuento} ${tag}`, code]).catch(() => {});
-        }
-        const txRes = await db.query('SELECT * FROM transactions WHERE user_id = ? ORDER BY id DESC', [userId]);
-        if (txRes.values) setTransactions(txRes.values);
+        supabaseService.updateTransaction(txId, { descuento: `${descuento} ${tag}` })
+          .then(() => supabaseService.getTransactions(userId))
+          .then(txs => setTransactions(txs))
+          .catch(console.error);
+      } else if (code) {
+        supabaseService.updateTransactionByCode(code, { descuento: `${descuento} ${tag}` })
+          .then(() => supabaseService.getTransactions(userId))
+          .then(txs => setTransactions(txs))
+          .catch(console.error);
       }
     }
 
@@ -353,8 +240,6 @@ export const LatidosProvider = ({ children }) => {
     setDailyGoal(newGoal);
     if (userId) {
       supabaseService.updateUser(userId, { daily_goal: newGoal }).catch(console.error);
-      const db = getDB();
-      if (db) await db.run('UPDATE users SET daily_goal = ? WHERE id = ?', [newGoal, userId]);
     }
   };
 
@@ -375,21 +260,7 @@ export const LatidosProvider = ({ children }) => {
         setTransactions(prev => [supaTx, ...prev]);
       }
     } catch (e) {
-      console.warn('Supabase addTransaction failed, saving locally:', e);
-    }
-
-    const db = getDB();
-    if (db && userId) {
-      try {
-        await db.run(
-          `INSERT INTO transactions (user_id, comercio_nombre, comercio_emoji, code, latidos_usados, descuento, fecha) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [userId, txInfo.comercioNombre, txInfo.comercioEmoji || '🏪', txInfo.code, txInfo.latidosUsados, txInfo.descuento, payload.fecha]
-        );
-        const txRes = await db.query('SELECT * FROM transactions WHERE user_id = ? ORDER BY id DESC', [userId]);
-        if (txRes.values) setTransactions(txRes.values);
-      } catch (err) {
-        console.error(err);
-      }
+      console.error('Error in registrarCanje:', e);
     }
   };
 
@@ -429,20 +300,7 @@ export const LatidosProvider = ({ children }) => {
         setTransactions(prev => [supaTx, ...prev]);
       }
     } catch (e) {
-      console.warn('Supabase addTransaction failed:', e);
-    }
-
-    const db = getDB();
-    if (db && userId) {
-      const res = await db.run(
-        `INSERT INTO transactions (user_id, comercio_nombre, comercio_emoji, code, latidos_usados, descuento, fecha) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [userId, comercio.nombre, comercio.emoji || '🏪', code, latidosRequeridos, bono.titulo, txData.fecha]
-      );
-      if (!txId && res?.changes?.lastId) {
-        txId = res.changes.lastId;
-      }
-      const txRes = await db.query('SELECT * FROM transactions WHERE user_id = ? ORDER BY id DESC', [userId]);
-      if (txRes.values) setTransactions(txRes.values);
+      console.error('Error generating canje code in Supabase:', e);
     }
 
     const newActiveCode = {
@@ -473,23 +331,6 @@ export const LatidosProvider = ({ children }) => {
     if (userId) {
       supabaseService.upsertPreferences(userId, newPrefs).catch(console.error);
     }
-
-    const db = getDB();
-    if (!db || !userId) return;
-    try {
-      const updates = [];
-      const params = [];
-      ['theme', 'language', 'currency'].forEach(key => {
-        if (newPrefs[key] !== undefined) {
-          updates.push(`${key} = ?`);
-          params.push(newPrefs[key]);
-        }
-      });
-      if (updates.length) {
-        params.push(userId);
-        await db.run(`UPDATE preferences SET ${updates.join(', ')} WHERE user_id = ?`, params);
-      }
-    } catch (err) { console.error(err); }
   };
 
   const toggleTheme = () => {
@@ -508,76 +349,22 @@ export const LatidosProvider = ({ children }) => {
     savePreferences({ currency: curr });
   };
 
-  // ── Admin & Comercios Methods ──
+  // ── Admin Methods ──
   const fetchAdminStats = async () => {
     try {
-      const users = await supabaseService.getAllUsers();
-      if (users && users.length > 0) {
-        let totalLatidos = 0;
-        let totalSteps = 0;
-        users.forEach(u => {
-          totalLatidos += (u.latidos || 0);
-          totalSteps += (u.steps_today || 0);
-        });
-
-        return {
-          totalUsers: users.length,
-          totalLatidos,
-          totalSteps,
-          totalTransactions: transactions.length,
-          totalLatidosGastados: transactions.reduce((acc, t) => acc + (t.latidos_usados || 0), 0),
-          totalDescuentos: 0
-        };
-      }
+      return await supabaseService.getAdminStats();
     } catch (e) {
-      console.warn('Supabase fetchAdminStats failed, using local DB:', e);
-    }
-
-    const db = getDB();
-    if (!db) return null;
-    try {
-      const usersCount = await db.query('SELECT count(*) as count FROM users');
-      const latidosTotal = await db.query('SELECT SUM(latidos) as total FROM users');
-      const txStats = await db.query('SELECT count(*) as count, SUM(latidos_usados) as latidos_gastados, SUM(descuento) as descuentos FROM transactions');
-
-      const usersData = await db.query('SELECT weekly_steps, steps_today FROM users');
-      let totalSteps = 0;
-      (usersData.values || []).forEach(u => {
-        try {
-          const weekly = JSON.parse(u.weekly_steps || '[0,0,0,0,0,0,0]');
-          totalSteps += weekly.reduce((a, b) => a + b, 0);
-        } catch (e) {}
-        totalSteps += (u.steps_today || 0);
-      });
-
-      return {
-        totalUsers: usersCount.values[0]?.count || 0,
-        totalLatidos: latidosTotal.values[0]?.total || 0,
-        totalSteps,
-        totalTransactions: txStats.values[0]?.count || 0,
-        totalLatidosGastados: txStats.values[0]?.latidos_gastados || 0,
-        totalDescuentos: txStats.values[0]?.descuentos || 0
-      };
-    } catch (e) {
-      console.error(e); return null;
+      console.error('Error in fetchAdminStats:', e);
+      return { totalUsers: 0, totalLatidos: 0, totalSteps: 0, totalTransactions: 0, totalLatidosGastados: 0, totalDescuentos: 0 };
     }
   };
 
   const fetchAdminUsers = async () => {
     try {
-      const supaUsers = await supabaseService.getAllUsers();
-      if (supaUsers && supaUsers.length > 0) return supaUsers;
+      return await supabaseService.getAllUsers();
     } catch (e) {
-      console.warn('Supabase fetchAdminUsers failed, using local DB:', e);
-    }
-
-    const db = getDB();
-    if (!db) return [];
-    try {
-      const res = await db.query('SELECT id, email, name, role, latidos, steps_today, racha, comercio_id, created_at FROM users ORDER BY created_at DESC');
-      return res.values || [];
-    } catch (e) {
-      console.error(e); return [];
+      console.error('Error in fetchAdminUsers:', e);
+      return [];
     }
   };
 
@@ -602,20 +389,7 @@ export const LatidosProvider = ({ children }) => {
     };
 
     try {
-      const supaUser = await supabaseService.registerUser(payload);
-      const db = getDB();
-      if (db && supaUser) {
-        try {
-          await db.run(
-            `INSERT OR REPLACE INTO users (id, name, email, password, role, latidos, steps_today, racha, comercio_id, weekly_steps, daily_goal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[0,0,0,0,0,0,0]', 10000)`,
-            [supaUser.id, payload.name, cleanEmail, payload.password, role, payload.latidos, payload.steps_today, payload.racha, payload.comercio_id]
-          );
-          await db.run(
-            `INSERT OR REPLACE INTO preferences (id, user_id, theme, language, currency) VALUES (?, ?, 'light', 'es', 'EUR')`,
-            [supaUser.id, supaUser.id]
-          );
-        } catch (e) {}
-      }
+      await supabaseService.registerUser(payload);
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message || 'Error al guardar el usuario en la base de datos' };
@@ -624,89 +398,41 @@ export const LatidosProvider = ({ children }) => {
 
   const fetchComercios = async () => {
     try {
-      const supaComercios = await supabaseService.getComercios();
-      if (supaComercios && supaComercios.length > 0) return supaComercios;
+      return await supabaseService.getComercios();
     } catch (e) {
-      console.warn('Supabase fetchComercios failed, using local DB:', e);
-    }
-
-    const db = getDB();
-    if (!db) return [];
-    try {
-      const res = await db.query('SELECT * FROM comercios');
-      if (res.values) {
-        return res.values.map(c => {
-          let parsedBonos = [];
-          let parsedHorario = {};
-          let parsedVacaciones = {};
-          try { parsedBonos = typeof c.bonos === 'string' ? JSON.parse(c.bonos) : (c.bonos || []); } catch (e) { parsedBonos = []; }
-          try { parsedHorario = typeof c.horario === 'string' ? JSON.parse(c.horario) : (c.horario || {}); } catch (e) { parsedHorario = {}; }
-          try { parsedVacaciones = typeof c.vacaciones === 'string' ? JSON.parse(c.vacaciones) : (c.vacaciones || {}); } catch (e) { parsedVacaciones = {}; }
-          
-          return {
-            ...c,
-            bonos: parsedBonos,
-            horario: parsedHorario,
-            vacaciones: parsedVacaciones,
-            aviso: c.aviso || '',
-            telefono: c.telefono || '',
-            email: c.email || '',
-            latidosNecesarios: c.latidos_necesarios || c.latidosNecesarios
-          };
-        });
-      }
+      console.error('Error in fetchComercios:', e);
       return [];
-    } catch (e) {
-      console.error(e); return [];
     }
   };
 
   const createComercio = async (comercioData) => {
     try {
       await supabaseService.createComercio(comercioData);
-    } catch (e) {
-      console.warn('Supabase createComercio failed, falling back locally:', e);
-    }
-
-    const db = getDB();
-    if (!db) return false;
-    try {
-      await db.run(`INSERT INTO comercios (nombre, categoria, direccion, lat, lon, descuento, latidos_necesarios, color, emoji, bonos, telefono, email)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-         [comercioData.nombre, comercioData.categoria, comercioData.direccion, parseFloat(comercioData.lat), parseFloat(comercioData.lon), parseFloat(comercioData.descuento), parseInt(comercioData.latidosNecesarios, 10), comercioData.color || '#000000', comercioData.emoji || '🏪', JSON.stringify(comercioData.bonos || []), comercioData.telefono || '', comercioData.email || '']);
       return true;
-    } catch (e) { console.error(e); return false; }
+    } catch (e) {
+      console.error('Error in createComercio:', e);
+      return false;
+    }
   };
 
   const updateComercio = async (id, comercioData) => {
     try {
       await supabaseService.updateComercio(id, comercioData);
-    } catch (e) {
-      console.warn('Supabase updateComercio failed, falling back locally:', e);
-    }
-
-    const db = getDB();
-    if (!db) return false;
-    try {
-      await db.run(`UPDATE comercios SET nombre = ?, categoria = ?, direccion = ?, lat = ?, lon = ?, descuento = ?, latidos_necesarios = ?, color = ?, emoji = ?, bonos = ? WHERE id = ?`,
-         [comercioData.nombre, comercioData.categoria, comercioData.direccion, parseFloat(comercioData.lat), parseFloat(comercioData.lon), parseFloat(comercioData.descuento), parseInt(comercioData.latidosNecesarios, 10), comercioData.color, comercioData.emoji, JSON.stringify(comercioData.bonos || []), id]);
       return true;
-    } catch (e) { console.error(e); return false; }
+    } catch (e) {
+      console.error('Error in updateComercio:', e);
+      return false;
+    }
   };
 
   const deleteComercio = async (id) => {
     try {
       await supabaseService.deleteComercio(id);
-    } catch (e) {
-      console.warn('Supabase deleteComercio failed, falling back locally:', e);
-    }
-
-    const db = getDB();
-    if (!db) return false;
-    try {
-      await db.run('DELETE FROM comercios WHERE id = ?', [id]);
       return true;
-    } catch (e) { console.error(e); return false; }
+    } catch (e) {
+      console.error('Error in deleteComercio:', e);
+      return false;
+    }
   };
 
   const updateUser = async (id, userData) => {
@@ -720,31 +446,10 @@ export const LatidosProvider = ({ children }) => {
           return { success: false, error: 'Solo un SuperAdministrador puede otorgar el rol de SuperAdministrador.' };
         }
         await supabaseService.updateUser(id, userData);
+        return { success: true };
       }
+      return { success: false, error: 'Usuario no encontrado' };
     } catch (e) {
-      console.warn('Supabase updateUser failed, continuing locally:', e);
-    }
-
-    const db = getDB();
-    if (!db) return { success: false, error: 'Base de datos no disponible' };
-    try {
-      const targetRes = await db.query('SELECT role FROM users WHERE id = ?', [id]);
-      if (targetRes.values && targetRes.values.length > 0) {
-        const targetUser = targetRes.values[0];
-        if (targetUser.role === 'superadmin' && user?.role !== 'superadmin') {
-          return { success: false, error: 'Los administradores no pueden modificar a un SuperAdministrador.' };
-        }
-        if (userData.role === 'superadmin' && user?.role !== 'superadmin') {
-          return { success: false, error: 'Solo un SuperAdministrador puede otorgar el rol de SuperAdministrador.' };
-        }
-      }
-
-      const comercioId = userData.comercio_id ? parseInt(userData.comercio_id, 10) : null;
-      await db.run(`UPDATE users SET name = ?, email = ?, role = ?, latidos = ?, steps_today = ?, racha = ?, comercio_id = ? WHERE id = ?`,
-         [userData.name, userData.email, userData.role, parseInt(userData.latidos, 10) || 0, parseInt(userData.steps_today, 10) || 0, parseInt(userData.racha, 10) || 0, comercioId, id]);
-      return { success: true };
-    } catch (e) {
-      console.error(e);
       return { success: false, error: e.message };
     }
   };
@@ -755,38 +460,22 @@ export const LatidosProvider = ({ children }) => {
     }
 
     try {
-      await supabaseService.deleteUser(id);
-    } catch (e) {
-      console.warn('Supabase deleteUser failed, continuing locally:', e);
-    }
-
-    const db = getDB();
-    if (!db) return { success: false, error: 'Base de datos no disponible' };
-    try {
-      const targetRes = await db.query('SELECT role FROM users WHERE id = ?', [id]);
-      if (targetRes.values && targetRes.values.length > 0) {
-        const targetUser = targetRes.values[0];
-        if (targetUser.role === 'superadmin' && user?.role !== 'superadmin') {
-          return { success: false, error: 'Los administradores no pueden eliminar a un SuperAdministrador.' };
-        }
+      const targetRes = await supabaseService.getUserById(id);
+      if (targetRes && targetRes.role === 'superadmin' && user?.role !== 'superadmin') {
+        return { success: false, error: 'Los administradores no pueden eliminar a un SuperAdministrador.' };
       }
 
-      await db.run('DELETE FROM preferences WHERE user_id = ?', [id]);
-      await db.run('DELETE FROM routes WHERE user_id = ?', [id]);
-      await db.run('DELETE FROM transactions WHERE user_id = ?', [id]);
-      await db.run('DELETE FROM activity WHERE user_id = ?', [id]);
-      await db.run('DELETE FROM users WHERE id = ?', [id]);
+      await supabaseService.deleteUser(id);
       return { success: true };
     } catch (e) {
-      console.error(e);
       return { success: false, error: e.message };
     }
   };
 
+  // ── Auth ──
   const registerUser = async (nombre, email, password) => {
     const cleanEmail = email.trim().toLowerCase();
 
-    // 1. Register directly in Supabase
     const supaUser = await supabaseService.registerUser({
       name: nombre,
       email: cleanEmail,
@@ -799,52 +488,18 @@ export const LatidosProvider = ({ children }) => {
       daily_goal: 10000
     });
 
-    // 2. Also mirror into local DB for offline cache if available
-    const db = getDB();
-    if (db && supaUser) {
-      try {
-        await db.run(
-          `INSERT OR REPLACE INTO users (id, name, email, password, role, latidos, steps_today, racha, weekly_steps, daily_goal) VALUES (?, ?, ?, ?, ?, 0, 0, 0, '[0,0,0,0,0,0,0]', 10000)`,
-          [supaUser.id, nombre, cleanEmail, password, 'user']
-        );
-        await db.run(
-          `INSERT OR REPLACE INTO preferences (id, user_id, theme, language, currency) VALUES (?, ?, 'light', 'es', 'EUR')`,
-          [supaUser.id, supaUser.id]
-        );
-      } catch (e) {}
-    }
-
     completeLogin(supaUser.id);
   };
 
   const loginUser = async (email, password) => {
     const cleanEmail = email.trim().toLowerCase();
-    let loggedUser = null;
+    const loggedUser = await supabaseService.login(cleanEmail, password);
 
-    // Try Supabase login
-    try {
-      loggedUser = await supabaseService.login(cleanEmail, password);
-    } catch (e) {
-      console.warn('Supabase loginUser failed, checking local DB:', e);
-    }
-
-    if (loggedUser) {
-      completeLogin(loggedUser.id);
-      return;
-    }
-
-    // Fallback to local DB login
-    const db = getDB();
-    if (!db) throw new Error('DB not loaded');
-    const userRes = await db.query('SELECT id FROM users WHERE email = ? AND password = ?', [cleanEmail, password]);
-    if (!userRes.values || userRes.values.length === 0) {
+    if (!loggedUser) {
       throw new Error('Credenciales incorrectas');
     }
-    const loginId = userRes.values[0].id;
-    if (cleanEmail === 'usuario@latidos.app') {
-       await db.run(`UPDATE users SET latidos = 1130, steps_today = 0, racha = 6, weekly_steps = '[4200,6100,8500,9200,7800,11200,0]' WHERE id = ?`, [loginId]);
-    }
-    completeLogin(loginId);
+
+    completeLogin(loggedUser.id);
   };
 
   const login = async () => {
@@ -879,75 +534,35 @@ export const LatidosProvider = ({ children }) => {
         setSavedRoutes(prev => [supaRoute, ...prev]);
       }
     } catch (e) {
-      console.warn('Supabase saveRoute failed, saving locally:', e);
-    }
-
-    const db = getDB();
-    if (db) {
-      try {
-        await db.run(
-          `INSERT INTO routes (user_id, name, distance, duration, latidos_earned, path, points) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [
-            userId,
-            routeData.name,
-            routeData.distance,
-            routeData.duration,
-            routeData.latidos_earned,
-            JSON.stringify(routeData.path || []),
-            JSON.stringify(routeData.points || [])
-          ]
-        );
-        const routesRes = await db.query('SELECT * FROM routes WHERE user_id = ? ORDER BY id DESC', [userId]);
-        if (routesRes.values) {
-          const parsedRoutes = routesRes.values.map(r => {
-            let p = [];
-            let pts = [];
-            try { p = typeof r.path === 'string' ? JSON.parse(r.path) : (r.path || []); } catch (e) { p = []; }
-            try { pts = typeof r.points === 'string' ? JSON.parse(r.points) : (r.points || []); } catch (e) { pts = []; }
-            return { ...r, path: p, points: pts };
-          });
-          setSavedRoutes(parsedRoutes);
-        }
-      } catch (e) { console.error('Error saving route locally:', e); }
+      console.error('Error in saveRoute:', e);
     }
   };
 
   const deleteRoute = async (id) => {
     try {
       await supabaseService.deleteRoute(id);
+      setSavedRoutes(prev => prev.filter(r => Number(r.id) !== Number(id)));
     } catch (e) {
-      console.warn('Supabase deleteRoute failed:', e);
+      console.error('Error in deleteRoute:', e);
     }
-
-    const db = getDB();
-    if (db) {
-      try {
-        await db.run('DELETE FROM routes WHERE id = ?', [Number(id)]);
-      } catch (e) { console.error('Error deleting route locally:', e); }
-    }
-    setSavedRoutes(prev => prev.filter(r => Number(r.id) !== Number(id)));
   };
 
   const updateRoute = async (id, updatedData) => {
-    const db = getDB();
-    if (!db) return;
     try {
-      await db.run('UPDATE routes SET name = ?, points = ? WHERE id = ?', [updatedData.name, JSON.stringify(updatedData.points), id]);
-      setSavedRoutes(prev => prev.map(r => r.id === id ? { ...r, ...updatedData } : r));
-    } catch (e) { console.error(e); }
+      const updated = await supabaseService.updateRoute(id, updatedData);
+      if (updated) {
+        setSavedRoutes(prev => prev.map(r => r.id === id ? { ...r, ...updatedData } : r));
+      }
+    } catch (e) {
+      console.error('Error in updateRoute:', e);
+    }
   };
 
   // ── Comercio Extra ──
   const validarBono = async (codigo, importe) => {
-    const db = getDB();
-    if (!db) return { success: false };
+    if (!user?.comercio_id) return { success: false, error: 'No tienes un comercio asociado' };
     try {
-      const txRes = await db.query('SELECT id FROM transactions WHERE code = ? AND comercio_nombre = (SELECT nombre FROM comercios WHERE id = ?)', [codigo, user?.comercio_id]);
-      if (!txRes.values || txRes.values.length === 0) return { success: false, error: 'Código inválido' };
-      const txId = txRes.values[0].id;
-
-      supabaseService.updateTransaction(txId, { importe_compra: parseFloat(importe) }).catch(console.error);
-      await db.run('UPDATE transactions SET importe_compra = ? WHERE id = ?', [parseFloat(importe), txId]);
+      await supabaseService.validateBono(codigo, user.comercio_id, importe);
 
       // If activeCode matches this validated code, clear it
       try {
@@ -962,89 +577,66 @@ export const LatidosProvider = ({ children }) => {
       } catch (e) {}
 
       return { success: true };
-    } catch (e) { return { success: false, error: e.message }; }
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
   };
 
   const fetchComercioStats = async () => {
-    const db = getDB();
-    if (!db || !user?.comercio_id) return { transactions: [] };
+    if (!user?.comercio_id) return { transactions: [] };
     try {
-      const cRes = await db.query('SELECT nombre FROM comercios WHERE id = ?', [user.comercio_id]);
-      if (cRes.values && cRes.values.length > 0) {
-        const txRes = await db.query('SELECT * FROM transactions WHERE comercio_nombre = ?', [cRes.values[0].nombre]);
-        return { transactions: txRes.values || [] };
+      const cList = await supabaseService.getComercios();
+      const myComercio = cList.find(c => c.id === user.comercio_id);
+      if (myComercio) {
+        const txs = await supabaseService.getTransactionsByComercio(myComercio.nombre);
+        return { transactions: txs };
       }
       return { transactions: [] };
-    } catch (e) { return { transactions: [] }; }
+    } catch (e) {
+      return { transactions: [] };
+    }
   };
 
   const updateComercioBonos = async (bonos) => {
     if (!user?.comercio_id) return false;
-    supabaseService.updateComercio(user.comercio_id, { bonos }).catch(console.error);
-
-    const db = getDB();
-    if (!db) return false;
     try {
-      await db.run('UPDATE comercios SET bonos = ? WHERE id = ?', [JSON.stringify(bonos), user.comercio_id]);
-      return true;
-    } catch (e) { return false; }
-  };
-
-  const updateComercioHorarios = async (comercioId, { horario, vacaciones, aviso, telefono, email }) => {
-    const targetId = Number(comercioId || user?.comercio_id || 2);
-    supabaseService.updateComercio(targetId, { horario, vacaciones, aviso, telefono, email }).catch(console.error);
-
-    const db = getDB();
-    if (!db) return false;
-    try {
-      const hVal = typeof horario === 'string' ? horario : JSON.stringify(horario || {});
-      const vVal = typeof vacaciones === 'string' ? vacaciones : JSON.stringify(vacaciones || {});
-      const aVal = typeof aviso === 'string' ? aviso : (aviso || '');
-      const telVal = telefono !== undefined ? telefono : '';
-      const emailVal = email !== undefined ? email : '';
-      
-      try {
-        await db.run('UPDATE comercios SET horario = ?, vacaciones = ?, aviso = ?, telefono = ?, email = ? WHERE id = ?', [hVal, vVal, aVal, telVal, emailVal, targetId]);
-      } catch (colErr) {
-        try { await db.run('ALTER TABLE comercios ADD COLUMN horario TEXT DEFAULT "{}"'); } catch (e) {}
-        try { await db.run('ALTER TABLE comercios ADD COLUMN vacaciones TEXT DEFAULT "{}"'); } catch (e) {}
-        try { await db.run('ALTER TABLE comercios ADD COLUMN aviso TEXT DEFAULT ""'); } catch (e) {}
-        try { await db.run('ALTER TABLE comercios ADD COLUMN telefono TEXT DEFAULT ""'); } catch (e) {}
-        try { await db.run('ALTER TABLE comercios ADD COLUMN email TEXT DEFAULT ""'); } catch (e) {}
-        await db.run('UPDATE comercios SET horario = ?, vacaciones = ?, aviso = ?, telefono = ?, email = ? WHERE id = ?', [hVal, vVal, aVal, telVal, emailVal, targetId]);
-      }
+      await supabaseService.updateComercio(user.comercio_id, { bonos });
       return true;
     } catch (e) {
-      console.error('Error updating comercio info:', e);
       return false;
     }
   };
 
-  // ── Activity History ──
+  const updateComercioHorarios = async (comercioId, { horario, vacaciones, aviso, telefono, email }) => {
+    const targetId = Number(comercioId || user?.comercio_id || 2);
+    try {
+      await supabaseService.updateComercio(targetId, { horario, vacaciones, aviso, telefono, email });
+      return true;
+    } catch (e) {
+      console.error('Error updating comercio info in Supabase:', e);
+      return false;
+    }
+  };
+
   const registrarActividad = async (pasos, latidosGanados) => {
     if (!userId) return;
     const fecha = new Date().toISOString().slice(0, 10);
-    supabaseService.upsertActivity(userId, fecha, pasos, latidosGanados).catch(console.error);
-
-    const db = getDB();
-    if (!db) return;
     try {
-      const existing = await db.query('SELECT id, pasos, latidos_ganados FROM activity WHERE user_id = ? AND fecha = ?', [userId, fecha]);
-      if (existing.values && existing.values.length > 0) {
-        const row = existing.values[0];
-        const newPasos = Math.max(row.pasos, pasos);
-        const newLatidos = row.latidos_ganados + latidosGanados;
-        await db.run('UPDATE activity SET pasos = ?, latidos_ganados = ? WHERE id = ?', [newPasos, newLatidos, row.id]);
-        setActivity(prev => prev.map(a => a.id === row.id ? { ...a, pasos: newPasos, latidos_ganados: newLatidos } : a));
-      } else {
-        await db.run('INSERT INTO activity (user_id, fecha, pasos, latidos_ganados) VALUES (?, ?, ?, ?)', [userId, fecha, pasos, latidosGanados]);
-        const newRec = await db.query('SELECT * FROM activity WHERE user_id = ? AND fecha = ?', [userId, fecha]);
-        if (newRec.values) setActivity(prev => [newRec.values[0], ...prev]);
+      const updatedAct = await supabaseService.upsertActivity(userId, fecha, pasos, latidosGanados);
+      if (updatedAct) {
+        setActivity(prev => {
+          const exists = prev.some(a => a.id === updatedAct.id);
+          if (exists) {
+            return prev.map(a => a.id === updatedAct.id ? updatedAct : a);
+          }
+          return [updatedAct, ...prev];
+        });
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error('Error registering activity in Supabase:', e);
+    }
   };
 
-  // Current translations shortcut
   const tr = t[language] || t.es;
 
   return (
