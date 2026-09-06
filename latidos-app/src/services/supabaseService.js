@@ -127,14 +127,47 @@ export const supabaseService = {
   },
 
   async upsertPreferences(userId, prefs) {
-    const { data, error } = await supabase
-      .from('preferences')
-      .upsert({ user_id: userId, ...prefs }, { onConflict: 'user_id' })
-      .select()
-      .maybeSingle();
+    try {
+      const { data: existing } = await supabase
+        .from('preferences')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
 
-    if (error) throw error;
-    return data;
+      if (existing) {
+        const { data, error } = await supabase
+          .from('preferences')
+          .update(prefs)
+          .eq('id', existing.id)
+          .select()
+          .maybeSingle();
+        if (error) throw error;
+        return data;
+      } else {
+        const nextId = await getNextId('preferences');
+        const payload = {
+          id: nextId,
+          user_id: userId,
+          theme: prefs.theme || 'light',
+          language: prefs.language || 'es',
+          currency: prefs.currency || 'EUR',
+          ...prefs
+        };
+        const { data, error } = await supabase
+          .from('preferences')
+          .insert([payload])
+          .select()
+          .maybeSingle();
+        if (error) throw error;
+        return data;
+      }
+    } catch (err) {
+      console.error('Error in upsertPreferences:', err);
+      // Fallback try simple update
+      try {
+        await supabase.from('preferences').update(prefs).eq('user_id', userId);
+      } catch (e) {}
+    }
   },
 
   // ── Comercios ──

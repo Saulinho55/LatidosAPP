@@ -70,7 +70,7 @@ export const LatidosProvider = ({ children }) => {
 
         // Fetch user preferences
         const supaPrefs = await supabaseService.getPreferences(uid);
-        if (supaPrefs) {
+        if (supaPrefs && supaPrefs.theme) {
           const loadedTheme = supaPrefs.theme || 'light';
           const loadedLang = supaPrefs.language || 'es';
           const loadedCurr = supaPrefs.currency || 'EUR';
@@ -80,6 +80,16 @@ export const LatidosProvider = ({ children }) => {
           localStorage.setItem('pref_theme', loadedTheme);
           localStorage.setItem('pref_language', loadedLang);
           localStorage.setItem('pref_currency', loadedCurr);
+          document.documentElement.setAttribute('data-theme', loadedTheme);
+        } else {
+          const currentTheme = localStorage.getItem('pref_theme') || 'light';
+          const currentLang = localStorage.getItem('pref_language') || 'es';
+          const currentCurr = localStorage.getItem('pref_currency') || 'EUR';
+          supabaseService.upsertPreferences(uid, {
+            theme: currentTheme,
+            language: currentLang,
+            currency: currentCurr
+          }).catch(console.error);
         }
 
         // Fetch transactions, routes, activity from Supabase
@@ -324,18 +334,29 @@ export const LatidosProvider = ({ children }) => {
   };
 
   const savePreferences = async (newPrefs) => {
-    if (newPrefs.theme !== undefined) { setTheme(newPrefs.theme); localStorage.setItem('pref_theme', newPrefs.theme); }
-    if (newPrefs.language !== undefined) { setLanguage(newPrefs.language); localStorage.setItem('pref_language', newPrefs.language); }
-    if (newPrefs.currency !== undefined) { setCurrency(newPrefs.currency); localStorage.setItem('pref_currency', newPrefs.currency); }
+    if (newPrefs.theme !== undefined) {
+      setTheme(newPrefs.theme);
+      localStorage.setItem('pref_theme', newPrefs.theme);
+      document.documentElement.setAttribute('data-theme', newPrefs.theme);
+    }
+    if (newPrefs.language !== undefined) {
+      setLanguage(newPrefs.language);
+      localStorage.setItem('pref_language', newPrefs.language);
+    }
+    if (newPrefs.currency !== undefined) {
+      setCurrency(newPrefs.currency);
+      localStorage.setItem('pref_currency', newPrefs.currency);
+    }
 
-    if (userId) {
-      supabaseService.upsertPreferences(userId, newPrefs).catch(console.error);
+    const currentUid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
+    if (currentUid) {
+      await supabaseService.upsertPreferences(currentUid, newPrefs).catch(console.error);
     }
   };
 
   const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
+    const current = document.documentElement.getAttribute('data-theme') || theme || 'light';
+    const newTheme = current === 'dark' ? 'light' : 'dark';
     savePreferences({ theme: newTheme });
   };
 

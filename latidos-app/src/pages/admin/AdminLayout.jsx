@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useLatidos } from '../../context/LatidosContext';
 
 const AdminLayout = () => {
-  const { user, loading } = useLatidos();
+  const { user, loading, theme, toggleTheme } = useLatidos();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -54,6 +54,28 @@ const AdminLayout = () => {
             {user?.role === 'superadmin' ? '👑 Panel SuperAdmin' : '⚡ Panel Admin'}
           </h1>
         </div>
+
+        <button
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          style={{
+            background: 'var(--color-card-alt)',
+            border: '1px solid var(--color-border)',
+            borderRadius: '2rem',
+            padding: '0.45rem 0.85rem',
+            cursor: 'pointer',
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            color: 'var(--color-text)',
+            fontFamily: 'var(--font-main)',
+            fontWeight: '600',
+            boxShadow: 'var(--shadow-card)'
+          }}
+        >
+          {theme === 'dark' ? '🌙 Oscuro' : '☀️ Claro'}
+        </button>
       </header>
 
       {/* Tabs */}
