@@ -51,10 +51,12 @@ export const supabaseService = {
         payload.id = nextId;
         const retry = await supabase.from('users').insert([payload]).select().single();
         if (retry.error) throw retry.error;
+        await supabase.from('preferences').insert([{ user_id: retry.data.id, theme: 'light', language: 'es', currency: 'EUR' }]).catch(() => {});
         return retry.data;
       }
       throw error;
     }
+    await supabase.from('preferences').insert([{ user_id: data.id, theme: 'light', language: 'es', currency: 'EUR' }]).catch(() => {});
     return data;
   },
 

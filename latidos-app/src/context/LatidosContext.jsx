@@ -602,33 +602,24 @@ export const LatidosProvider = ({ children }) => {
     };
 
     try {
-      await supabaseService.registerUser(payload);
-    } catch (e) {
-      console.warn('Supabase createUser failed, continuing locally:', e);
-    }
-
-    const db = getDB();
-    if (db) {
-      try {
-        const existing = await db.query('SELECT id FROM users WHERE email = ?', [cleanEmail]);
-        if (existing.values && existing.values.length > 0) {
-          return { success: false, error: 'El correo electrónico ya está registrado.' };
-        }
-        await db.run(
-          `INSERT INTO users (name, email, password, role, latidos, steps_today, racha, comercio_id, weekly_steps, daily_goal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[0,0,0,0,0,0,0]', 10000)`,
-          [payload.name, cleanEmail, payload.password, role, payload.latidos, payload.steps_today, payload.racha, payload.comercio_id]
-        );
-        const userRes = await db.query('SELECT id FROM users WHERE email = ?', [cleanEmail]);
-        if (userRes.values && userRes.values.length > 0) {
-          const newId = userRes.values[0].id;
-          await db.run('INSERT INTO preferences (user_id, theme, language, currency) VALUES (?, ?, ?, ?)', [newId, 'light', 'es', 'EUR']);
-        }
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: e.message };
+      const supaUser = await supabaseService.registerUser(payload);
+      const db = getDB();
+      if (db && supaUser) {
+        try {
+          await db.run(
+            `INSERT OR REPLACE INTO users (id, name, email, password, role, latidos, steps_today, racha, comercio_id, weekly_steps, daily_goal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[0,0,0,0,0,0,0]', 10000)`,
+            [supaUser.id, payload.name, cleanEmail, payload.password, role, payload.latidos, payload.steps_today, payload.racha, payload.comercio_id]
+          );
+          await db.run(
+            `INSERT OR REPLACE INTO preferences (id, user_id, theme, language, currency) VALUES (?, ?, 'light', 'es', 'EUR')`,
+            [supaUser.id, supaUser.id]
+          );
+        } catch (e) {}
       }
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message || 'Error al guardar el usuario en la base de datos' };
     }
-    return { success: true };
   };
 
   const fetchComercios = async () => {
@@ -792,45 +783,38 @@ export const LatidosProvider = ({ children }) => {
     }
   };
 
-  // ── Auth ──
   const registerUser = async (nombre, email, password) => {
     const cleanEmail = email.trim().toLowerCase();
-    let registeredId = null;
 
-    try {
-      const supaUser = await supabaseService.registerUser({
-        name: nombre,
-        email: cleanEmail,
-        password: password,
-        role: 'user',
-        latidos: 0,
-        steps_today: 0,
-        racha: 0,
-        weekly_steps: '[0,0,0,0,0,0,0]',
-        daily_goal: 10000
-      });
-      if (supaUser) registeredId = supaUser.id;
-    } catch (e) {
-      console.warn('Supabase registerUser failed, registering locally:', e);
-    }
+    // 1. Register directly in Supabase
+    const supaUser = await supabaseService.registerUser({
+      name: nombre,
+      email: cleanEmail,
+      password: password,
+      role: 'user',
+      latidos: 0,
+      steps_today: 0,
+      racha: 0,
+      weekly_steps: '[0,0,0,0,0,0,0]',
+      daily_goal: 10000
+    });
 
+    // 2. Also mirror into local DB for offline cache if available
     const db = getDB();
-    if (db) {
-      const existing = await db.query('SELECT id FROM users WHERE email = ?', [cleanEmail]);
-      if (existing.values && existing.values.length > 0) {
-        if (!registeredId) throw new Error('El email ya está registrado');
-      } else {
-        await db.run('INSERT INTO users (name, email, password) VALUES (?, ?, ?)', [nombre, cleanEmail, password]);
-        const userRes = await db.query('SELECT id FROM users WHERE email = ?', [cleanEmail]);
-        if (userRes.values && userRes.values.length > 0) {
-          const localId = userRes.values[0].id;
-          await db.run('INSERT INTO preferences (user_id, theme, language, currency) VALUES (?, ?, ?, ?)', [localId, 'light', 'es', 'EUR']);
-          if (!registeredId) registeredId = localId;
-        }
-      }
+    if (db && supaUser) {
+      try {
+        await db.run(
+          `INSERT OR REPLACE INTO users (id, name, email, password, role, latidos, steps_today, racha, weekly_steps, daily_goal) VALUES (?, ?, ?, ?, ?, 0, 0, 0, '[0,0,0,0,0,0,0]', 10000)`,
+          [supaUser.id, nombre, cleanEmail, password, 'user']
+        );
+        await db.run(
+          `INSERT OR REPLACE INTO preferences (id, user_id, theme, language, currency) VALUES (?, ?, 'light', 'es', 'EUR')`,
+          [supaUser.id, supaUser.id]
+        );
+      } catch (e) {}
     }
 
-    if (registeredId) completeLogin(registeredId);
+    completeLogin(supaUser.id);
   };
 
   const loginUser = async (email, password) => {
