@@ -55,7 +55,7 @@ const ComercioHoy = () => {
           gastoHoy: gastoHoy.toFixed(2).replace('.', ','),
           bonosHoy: bonosValidados || todayTxs.length,
           clientesNuevos: clientesNuevos,
-          recentTxs: [...data.transactions].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 15),
+          recentTxs: [...data.transactions].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 20),
           comercioNombre: data.comercio?.nombre || user?.name || 'Mi Comercio'
         });
       }
@@ -76,20 +76,21 @@ const ComercioHoy = () => {
 
   const StatBox = ({ title, value, icon }) => (
     <div style={{
-      backgroundColor: '#F5D3D6',
-      borderRadius: '1rem',
-      padding: '1.2rem',
+      backgroundColor: 'var(--color-card)',
+      border: '1px solid var(--color-border)',
+      borderRadius: '1.2rem',
+      padding: '1.1rem 1.2rem',
       flex: '1 1 calc(50% - 0.5rem)',
       minWidth: '140px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+      boxShadow: 'var(--shadow-card)'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-        <p style={{ fontFamily: 'var(--font-main)', fontSize: '0.78rem', color: '#6b4f53', margin: 0, fontWeight: '600' }}>
+        <p style={{ fontFamily: 'var(--font-main)', fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: 0, fontWeight: '600' }}>
           {title}
         </p>
         {icon && <span style={{ fontSize: '1.1rem' }}>{icon}</span>}
       </div>
-      <p style={{ fontFamily: 'var(--font-display)', fontSize: '1.9rem', fontWeight: '700', color: 'var(--color-header-bg)', margin: 0, lineHeight: 1 }}>
+      <p style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', fontWeight: '700', color: 'var(--color-text)', margin: 0, lineHeight: 1.1 }}>
         {value}
       </p>
     </div>
@@ -99,11 +100,11 @@ const ComercioHoy = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '0.8rem' }}>
         <div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', color: 'var(--color-header-bg)', margin: 0, fontWeight: '700' }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', color: 'var(--color-text)', margin: 0, fontWeight: '700' }}>
             Resumen de hoy
           </h2>
           {stats.comercioNombre && (
-            <p style={{ fontSize: '0.85rem', color: '#6b4f53', margin: '0.2rem 0 0', fontWeight: '600' }}>
+            <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', margin: '0.2rem 0 0', fontWeight: '600' }}>
               🏪 {stats.comercioNombre}
             </p>
           )}
@@ -113,9 +114,9 @@ const ComercioHoy = () => {
           <button
             onClick={() => loadStats(true)}
             style={{
-              backgroundColor: '#fff',
-              border: '1px solid #E8C8CB',
-              color: 'var(--color-header-bg)',
+              backgroundColor: 'var(--color-card)',
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text)',
               padding: '0.5rem 0.9rem',
               borderRadius: '1.5rem',
               fontSize: '0.8rem',
@@ -123,7 +124,8 @@ const ComercioHoy = () => {
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.3rem'
+              gap: '0.3rem',
+              boxShadow: 'var(--shadow-card)'
             }}
           >
             {isRefreshing ? '⌛ Actualizando...' : '🔄 Actualizar'}
@@ -132,16 +134,16 @@ const ComercioHoy = () => {
           <button
             onClick={() => navigate('/comercio/validar')}
             style={{
-              backgroundColor: 'var(--color-header-bg)',
+              backgroundColor: 'var(--color-accent)',
               color: '#fff',
               border: 'none',
-              padding: '0.5rem 1.2rem',
+              padding: '0.5rem 1.1rem',
               borderRadius: '1.5rem',
               fontFamily: 'var(--font-main)',
               fontWeight: '700',
               fontSize: '0.85rem',
               cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(78,3,15,0.2)'
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
             }}
           >
             🎟️ Validar bono
@@ -158,24 +160,24 @@ const ComercioHoy = () => {
 
       {/* Historial de canjes */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
-        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', color: 'var(--color-header-bg)', margin: 0, fontWeight: '700' }}>
+        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', color: 'var(--color-text)', margin: 0, fontWeight: '700' }}>
           Últimos canjes recibidos
         </h3>
-        <span style={{ fontSize: '0.75rem', color: '#6b4f53' }}>
+        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: '600' }}>
           Total: {stats.recentTxs.length}
         </span>
       </div>
 
-      <div style={{ backgroundColor: '#fff', borderRadius: '1.2rem', overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', border: '1px solid #E8C8CB' }}>
+      <div style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', overflow: 'hidden', boxShadow: 'var(--shadow-card)', border: '1px solid var(--color-border)' }}>
         {loading ? (
-          <p style={{ padding: '2rem', textAlign: 'center', color: '#6b4f53', margin: 0 }}>Cargando canjes...</p>
+          <p style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-muted)', margin: 0 }}>Cargando canjes...</p>
         ) : stats.recentTxs.length === 0 ? (
           <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center' }}>
-            <span style={{ fontSize: '2.2rem', display: 'block', marginBottom: '0.5rem' }}>🎟️</span>
-            <p style={{ margin: 0, fontFamily: 'var(--font-main)', color: '#6b4f53', fontWeight: '600', fontSize: '0.95rem' }}>
+            <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '0.5rem' }}>🎟️</span>
+            <p style={{ margin: 0, fontFamily: 'var(--font-main)', color: 'var(--color-text)', fontWeight: '600', fontSize: '0.95rem' }}>
               No hay canjes registrados aún.
             </p>
-            <p style={{ margin: '0.3rem 0 0', color: '#999', fontSize: '0.8rem' }}>
+            <p style={{ margin: '0.3rem 0 0', color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
               Cuando un cliente canjee un bono en tu tienda, aparecerá aquí en tiempo real.
             </p>
           </div>
@@ -183,41 +185,41 @@ const ComercioHoy = () => {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontFamily: 'var(--font-main)', fontSize: '0.85rem' }}>
               <thead>
-                <tr style={{ backgroundColor: '#F5E6E8', color: '#6b4f53', borderBottom: '1px solid #E8C8CB' }}>
-                  <th style={{ padding: '0.9rem 1rem', fontWeight: '700' }}>Fecha / Hora</th>
-                  <th style={{ padding: '0.9rem 1rem', fontWeight: '700' }}>Código</th>
-                  <th style={{ padding: '0.9rem 1rem', fontWeight: '700' }}>Bono</th>
-                  <th style={{ padding: '0.9rem 1rem', fontWeight: '700' }}>Estado / Importe</th>
-                  <th style={{ padding: '0.9rem 1rem', fontWeight: '700', textAlign: 'right' }}>Acción</th>
+                <tr style={{ backgroundColor: 'var(--color-card-alt)', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>
+                  <th style={{ padding: '0.85rem 1rem', fontWeight: '700', fontSize: '0.78rem', textTransform: 'uppercase' }}>Fecha</th>
+                  <th style={{ padding: '0.85rem 1rem', fontWeight: '700', fontSize: '0.78rem', textTransform: 'uppercase' }}>Código</th>
+                  <th style={{ padding: '0.85rem 1rem', fontWeight: '700', fontSize: '0.78rem', textTransform: 'uppercase' }}>Bono</th>
+                  <th style={{ padding: '0.85rem 1rem', fontWeight: '700', fontSize: '0.78rem', textTransform: 'uppercase' }}>Estado</th>
+                  <th style={{ padding: '0.85rem 1rem', fontWeight: '700', fontSize: '0.78rem', textTransform: 'uppercase', textAlign: 'right' }}>Acción</th>
                 </tr>
               </thead>
               <tbody>
                 {stats.recentTxs.map(tx => {
                   const isValidated = tx.importe_compra && parseFloat(tx.importe_compra) > 0;
-                  const isCancelled = tx.descuento && (tx.descuento.includes('Cancelado') || tx.descuento.includes('Caducado'));
+                  const isCancelled = tx.descuento && typeof tx.descuento === 'string' && (tx.descuento.includes('Cancelado') || tx.descuento.includes('Caducado'));
 
                   return (
-                    <tr key={tx.id} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: isValidated ? '#fff' : '#FFFDF7' }}>
-                      <td style={{ padding: '0.9rem 1rem', color: '#444', whiteSpace: 'nowrap' }}>
-                        {new Date(tx.fecha).toLocaleDateString('es-ES')} <span style={{ opacity: 0.7, fontSize: '0.78rem' }}>{new Date(tx.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <tr key={tx.id} style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-card)' }}>
+                      <td style={{ padding: '0.9rem 1rem', color: 'var(--color-text)', whiteSpace: 'nowrap' }}>
+                        {new Date(tx.fecha).toLocaleDateString('es-ES')} <span style={{ opacity: 0.6, fontSize: '0.75rem' }}>{new Date(tx.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </td>
-                      <td style={{ padding: '0.9rem 1rem', color: 'var(--color-header-bg)', fontWeight: '800', letterSpacing: '0.04em' }}>
+                      <td style={{ padding: '0.9rem 1rem', color: 'var(--color-accent)', fontWeight: '800', letterSpacing: '0.04em' }}>
                         {tx.code}
                       </td>
-                      <td style={{ padding: '0.9rem 1rem', color: '#333', fontWeight: '600' }}>
+                      <td style={{ padding: '0.9rem 1rem', color: 'var(--color-text)', fontWeight: '600' }}>
                         {typeof tx.descuento === 'number' ? `${tx.descuento} € dto.` : tx.descuento} <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({tx.latidos_usados || 0} ❤)</span>
                       </td>
                       <td style={{ padding: '0.9rem 1rem' }}>
                         {isValidated ? (
-                          <span style={{ backgroundColor: '#E8F5E9', color: '#2E7D32', padding: '0.3rem 0.7rem', borderRadius: '1rem', fontWeight: '800', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                          <span style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#059669', padding: '0.3rem 0.65rem', borderRadius: '1rem', fontWeight: '700', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
                             ✓ Validado ({parseFloat(tx.importe_compra).toFixed(2)} €)
                           </span>
                         ) : isCancelled ? (
-                          <span style={{ backgroundColor: '#FEE2E2', color: '#991B1B', padding: '0.3rem 0.7rem', borderRadius: '1rem', fontWeight: '700', fontSize: '0.78rem' }}>
-                            ✕ Expirado / Cancelado
+                          <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#dc2626', padding: '0.3rem 0.65rem', borderRadius: '1rem', fontWeight: '700', fontSize: '0.78rem' }}>
+                            ✕ Cancelado
                           </span>
                         ) : (
-                          <span style={{ backgroundColor: '#FFF3E0', color: '#E65100', padding: '0.3rem 0.7rem', borderRadius: '1rem', fontWeight: '800', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <span style={{ backgroundColor: 'rgba(245, 158, 11, 0.18)', color: '#d97706', padding: '0.3rem 0.65rem', borderRadius: '1rem', fontWeight: '800', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
                             ⏳ Esperando validar
                           </span>
                         )}
@@ -227,10 +229,10 @@ const ComercioHoy = () => {
                           <button
                             onClick={() => navigate(`/comercio/validar?code=${tx.code}`)}
                             style={{
-                              backgroundColor: 'var(--color-header-bg)',
+                              backgroundColor: 'var(--color-accent)',
                               color: '#fff',
                               border: 'none',
-                              padding: '0.4rem 0.8rem',
+                              padding: '0.35rem 0.75rem',
                               borderRadius: '0.8rem',
                               fontSize: '0.78rem',
                               fontWeight: '700',

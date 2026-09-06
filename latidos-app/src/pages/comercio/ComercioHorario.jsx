@@ -164,28 +164,27 @@ const ComercioHorario = () => {
   return (
     <div style={{ maxWidth: '640px' }}>
       <div style={{ marginBottom: '1.5rem' }}>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', color: 'var(--color-header-bg)', fontWeight: '600', margin: 0 }}>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', color: 'var(--color-text)', fontWeight: '700', margin: 0 }}>
           Horarios & Avisos
         </h2>
-        <p style={{ color: '#6b4f53', fontSize: '0.88rem', fontFamily: 'var(--font-main)', marginTop: '0.3rem' }}>
+        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.88rem', fontFamily: 'var(--font-main)', marginTop: '0.3rem' }}>
           Configura tus horas de apertura, periodos de vacaciones y avisos destacados que verán los usuarios en la app.
         </p>
       </div>
 
       {saveSuccess && (
         <div style={{
-          backgroundColor: '#dcfce7',
-          color: '#15803d',
+          backgroundColor: 'rgba(16, 185, 129, 0.15)',
+          color: '#059669',
           padding: '0.9rem 1.2rem',
           borderRadius: '1rem',
           marginBottom: '1.5rem',
-          border: '1px solid #bbf7d0',
+          border: '1px solid rgba(16, 185, 129, 0.3)',
           fontWeight: '600',
           fontFamily: 'var(--font-main)',
           display: 'flex',
           alignItems: 'center',
-          gap: '0.5rem',
-          animation: 'fadeIn 0.3s ease'
+          gap: '0.5rem'
         }}>
           <span>✅</span>
           <span>¡Horarios, vacaciones y avisos guardados correctamente!</span>
@@ -196,13 +195,14 @@ const ComercioHorario = () => {
 
         {/* ── SECCIÓN 1: HORARIO SEMANAL ── */}
         <div style={{
-          backgroundColor: '#FCECEE',
+          backgroundColor: 'var(--color-card)',
           padding: '1.5rem',
           borderRadius: '1.2rem',
-          border: '1px solid #E8C8CB'
+          border: '1px solid var(--color-border)',
+          boxShadow: 'var(--shadow-card)'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--color-header-bg)', margin: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--color-text)', margin: 0, fontWeight: '700' }}>
               ⏰ Horario Semanal
             </h3>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
@@ -227,14 +227,15 @@ const ComercioHorario = () => {
             {DIAS_SEMANA.map(({ key, label }) => (
               <div key={key} style={{
                 display: 'grid',
-                gridTemplateColumns: '100px 1fr 70px',
+                gridTemplateColumns: '95px 1fr 70px',
                 alignItems: 'center',
                 gap: '0.6rem',
-                backgroundColor: 'rgba(255,255,255,0.6)',
+                backgroundColor: 'var(--color-card-alt)',
                 padding: '0.5rem 0.8rem',
-                borderRadius: '0.8rem'
+                borderRadius: '0.8rem',
+                border: '1px solid var(--color-border)'
               }}>
-                <span style={{ fontWeight: '600', fontSize: '0.85rem', color: 'var(--color-header-bg)', fontFamily: 'var(--font-main)' }}>
+                <span style={{ fontWeight: '700', fontSize: '0.82rem', color: 'var(--color-text)', fontFamily: 'var(--font-main)' }}>
                   {label}
                 </span>
                 <input
@@ -245,19 +246,20 @@ const ComercioHorario = () => {
                   style={{
                     padding: '0.45rem 0.7rem',
                     borderRadius: '0.5rem',
-                    border: '1px solid #E8C8CB',
+                    border: '1px solid var(--color-border)',
                     fontFamily: 'var(--font-main)',
                     fontSize: '0.85rem',
-                    backgroundColor: 'white',
-                    color: '#333'
+                    backgroundColor: 'var(--color-input-bg)',
+                    color: 'var(--color-text)',
+                    outline: 'none'
                   }}
                 />
                 <button
                   type="button"
                   onClick={() => handleHorarioChange(key, horario[key] === 'Cerrado' ? '09:00 - 14:00, 17:00 - 20:30' : 'Cerrado')}
                   style={{
-                    backgroundColor: horario[key] === 'Cerrado' ? '#fee2e2' : '#f3f4f6',
-                    color: horario[key] === 'Cerrado' ? '#b91c1c' : '#4b5563',
+                    backgroundColor: horario[key] === 'Cerrado' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                    color: horario[key] === 'Cerrado' ? '#dc2626' : '#059669',
                     border: 'none',
                     padding: '0.35rem 0.5rem',
                     borderRadius: '0.5rem',
@@ -276,26 +278,27 @@ const ComercioHorario = () => {
 
         {/* ── SECCIÓN 2: VACACIONES Y CIERRE TEMPORAL ── */}
         <div style={{
-          backgroundColor: '#FCECEE',
+          backgroundColor: 'var(--color-card)',
           padding: '1.5rem',
           borderRadius: '1.2rem',
-          border: '1px solid #E8C8CB'
+          border: '1px solid var(--color-border)',
+          boxShadow: 'var(--shadow-card)'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
             <div>
-              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--color-header-bg)', margin: 0 }}>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--color-text)', margin: 0, fontWeight: '700' }}>
                 🏖️ Periodo de Vacaciones / Cierres
               </h3>
-              <p style={{ fontSize: '0.8rem', color: '#6b4f53', fontFamily: 'var(--font-main)', marginTop: '0.2rem' }}>
+              <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontFamily: 'var(--font-main)', marginTop: '0.2rem' }}>
                 Informa a los usuarios si tu tienda estará cerrada temporalmente.
               </p>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem', color: 'var(--color-header-bg)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem', color: 'var(--color-text)' }}>
               <input
                 type="checkbox"
                 checked={vacaciones.activo}
                 onChange={e => setVacaciones({...vacaciones, activo: e.target.checked})}
-                style={{ width: '18px', height: '18px', accentColor: 'var(--color-header-bg)' }}
+                style={{ width: '18px', height: '18px', accentColor: 'var(--color-accent)' }}
               />
               {vacaciones.activo ? 'Activado' : 'Desactivado'}
             </label>
@@ -337,22 +340,23 @@ const ComercioHorario = () => {
 
         {/* ── SECCIÓN 3: AVISO DESTACADO / NOTICIA ── */}
         <div style={{
-          backgroundColor: '#FCECEE',
+          backgroundColor: 'var(--color-card)',
           padding: '1.5rem',
           borderRadius: '1.2rem',
-          border: '1px solid #E8C8CB'
+          border: '1px solid var(--color-border)',
+          boxShadow: 'var(--shadow-card)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
-            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--color-header-bg)', margin: 0 }}>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--color-text)', margin: 0, fontWeight: '700' }}>
               📢 Aviso Especial / Cartelera
             </h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.82rem', fontWeight: '600', color: 'var(--color-header-bg)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.82rem', fontWeight: '700', color: 'var(--color-text)' }}>
                 <input
                   type="checkbox"
                   checked={aviso.activo}
                   onChange={e => setAviso({...aviso, activo: e.target.checked})}
-                  style={{ width: '16px', height: '16px', accentColor: 'var(--color-header-bg)' }}
+                  style={{ width: '16px', height: '16px', accentColor: 'var(--color-accent)' }}
                 />
                 Activar
               </label>
@@ -360,7 +364,7 @@ const ComercioHorario = () => {
                 <button
                   type="button"
                   onClick={() => setAviso({ activo: false, texto: '', programar: false, inicio: '', fin: '' })}
-                  style={{ background: 'none', border: 'none', color: '#b91c1c', fontSize: '0.78rem', cursor: 'pointer', fontWeight: '600' }}
+                  style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '0.78rem', cursor: 'pointer', fontWeight: '700' }}
                 >
                   ✕ Borrar
                 </button>
@@ -368,8 +372,8 @@ const ComercioHorario = () => {
             </div>
           </div>
 
-          <p style={{ fontSize: '0.8rem', color: '#6b4f53', fontFamily: 'var(--font-main)', marginBottom: '0.8rem' }}>
-            Muestra un mensaje importante en la ficha de tu tienda. Puedes programarlo para que solo se muestre entre dos fechas específicas (ej: de X a Y).
+          <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontFamily: 'var(--font-main)', marginBottom: '0.8rem' }}>
+            Muestra un mensaje importante en la ficha de tu tienda. Puedes programarlo para que solo se muestre entre dos fechas específicas.
           </p>
 
           <div style={{ marginBottom: '0.9rem' }}>
@@ -389,17 +393,17 @@ const ComercioHorario = () => {
 
           {/* Programación de fechas del aviso */}
           <div style={{
-            backgroundColor: 'rgba(255,255,255,0.65)',
+            backgroundColor: 'var(--color-card-alt)',
             padding: '0.8rem 1rem',
             borderRadius: '0.8rem',
-            border: '1px solid #E8C8CB'
+            border: '1px solid var(--color-border)'
           }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.82rem', fontWeight: '600', color: 'var(--color-header-bg)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.82rem', fontWeight: '700', color: 'var(--color-text)' }}>
               <input
                 type="checkbox"
                 checked={aviso.programar}
                 onChange={e => setAviso({ ...aviso, programar: e.target.checked })}
-                style={{ width: '15px', height: '15px', accentColor: 'var(--color-header-bg)' }}
+                style={{ width: '15px', height: '15px', accentColor: 'var(--color-accent)' }}
               />
               🕒 Programar fechas de publicación (mostrar solo de fecha X a fecha Y)
             </label>
@@ -430,18 +434,19 @@ const ComercioHorario = () => {
         </div>
 
 
-        {/* ── SECCIÓN 4: INFORMACIÓN DE CONTACTO (OPCIONAL) ── */}
+        {/* ── SECCIÓN 4: INFORMACIÓN DE CONTACTO ── */}
         <div style={{
-          backgroundColor: '#FCECEE',
+          backgroundColor: 'var(--color-card)',
           padding: '1.5rem',
           borderRadius: '1.2rem',
-          border: '1px solid #E8C8CB'
+          border: '1px solid var(--color-border)',
+          boxShadow: 'var(--shadow-card)'
         }}>
-          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--color-header-bg)', margin: '0 0 0.4rem' }}>
+          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: 'var(--color-text)', margin: '0 0 0.4rem', fontWeight: '700' }}>
             📞 Información de Contacto (Opcional)
           </h3>
-          <p style={{ fontSize: '0.8rem', color: '#6b4f53', fontFamily: 'var(--font-main)', marginBottom: '1rem' }}>
-            Añade un teléfono o email para que los clientes puedan llamarte o escribirte directamente con 1 clic desde la app. Si no deseas mostrar alguno, déjalo en blanco.
+          <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontFamily: 'var(--font-main)', marginBottom: '1rem' }}>
+            Añade un teléfono o email para que los clientes puedan llamarte o escribirte directamente con 1 clic desde la app.
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
@@ -449,7 +454,7 @@ const ComercioHorario = () => {
               <label style={fieldLabelStyle}>📞 Teléfono de contacto</label>
               <input
                 type="tel"
-                placeholder="Ej: 928 123 456 / 600 000 000"
+                placeholder="Ej: 928 123 456"
                 value={telefono}
                 onChange={e => setTelefono(e.target.value)}
                 style={inputStyle}
@@ -469,15 +474,15 @@ const ComercioHorario = () => {
         </div>
 
 
-        {/* ── VISTA PREVIA (CÓMO LO VE EL USUARIO) ── */}
+        {/* ── VISTA PREVIA ── */}
         <div style={{
-          backgroundColor: '#fff',
+          backgroundColor: 'var(--color-card)',
           padding: '1.4rem',
           borderRadius: '1.2rem',
-          border: '1px solid #E8C8CB',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.04)'
+          border: '1px solid var(--color-border)',
+          boxShadow: 'var(--shadow-card)'
         }}>
-          <p style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--color-header-bg)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.8rem' }}>
+          <p style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.8rem' }}>
             👁️ Vista Previa en la Ficha del Negocio
           </p>
 
@@ -495,10 +500,10 @@ const ComercioHorario = () => {
             }}>
               <span style={{ fontSize: '1.2rem' }}>🏖️</span>
               <div>
-                <p style={{ fontWeight: '700', fontSize: '0.85rem', color: '#b91c1c', margin: '0 0 0.1rem' }}>
+                <p style={{ fontWeight: '700', fontSize: '0.85rem', color: '#dc2626', margin: '0 0 0.1rem' }}>
                   Cerrado por vacaciones
                 </p>
-                <p style={{ fontSize: '0.8rem', color: '#991b1b', margin: 0, lineHeight: '1.4' }}>
+                <p style={{ fontSize: '0.8rem', color: '#b91c1c', margin: 0, lineHeight: '1.4' }}>
                   {vacaciones.mensaje || `Estaremos de vacaciones del ${vacaciones.inicio} al ${vacaciones.fin}.`}
                 </p>
               </div>
@@ -508,8 +513,8 @@ const ComercioHorario = () => {
           {/* Banner de aviso especial en vista previa */}
           {aviso.activo && aviso.texto?.trim() && (
             <div style={{
-              backgroundColor: 'rgba(234, 179, 8, 0.15)',
-              border: '1px solid #eab308',
+              backgroundColor: 'rgba(245, 158, 11, 0.15)',
+              border: '1px solid rgba(245, 158, 11, 0.4)',
               borderRadius: '0.8rem',
               padding: '0.75rem 1rem',
               marginBottom: '0.8rem',
@@ -520,16 +525,16 @@ const ComercioHorario = () => {
               <span style={{ fontSize: '1.2rem' }}>📢</span>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.1rem' }}>
-                  <p style={{ fontWeight: '700', fontSize: '0.85rem', color: '#854d0e', margin: 0 }}>
+                  <p style={{ fontWeight: '700', fontSize: '0.85rem', color: '#d97706', margin: 0 }}>
                     Aviso del comercio
                   </p>
                   {aviso.programar && (aviso.inicio || aviso.fin) && (
-                    <span style={{ fontSize: '0.68rem', backgroundColor: '#fef08a', color: '#854d0e', padding: '0.1rem 0.4rem', borderRadius: '1rem', fontWeight: '600' }}>
+                    <span style={{ fontSize: '0.68rem', backgroundColor: 'rgba(245, 158, 11, 0.25)', color: '#b45309', padding: '0.1rem 0.4rem', borderRadius: '1rem', fontWeight: '700' }}>
                       {aviso.inicio && aviso.fin ? `${aviso.inicio} al ${aviso.fin}` : (aviso.fin ? `Hasta ${aviso.fin}` : `Desde ${aviso.inicio}`)}
                     </span>
                   )}
                 </div>
-                <p style={{ fontSize: '0.8rem', color: '#713f12', margin: 0, lineHeight: '1.4' }}>
+                <p style={{ fontSize: '0.8rem', color: '#b45309', margin: 0, lineHeight: '1.4' }}>
                   {aviso.texto}
                 </p>
               </div>
@@ -544,11 +549,11 @@ const ComercioHorario = () => {
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '0.35rem',
-                  backgroundColor: '#ecfdf5',
-                  border: '1px solid #a7f3d0',
-                  color: '#047857',
+                  backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  color: '#059669',
                   fontSize: '0.78rem',
-                  fontWeight: '600',
+                  fontWeight: '700',
                   padding: '0.35rem 0.7rem',
                   borderRadius: '1rem'
                 }}>
@@ -561,11 +566,11 @@ const ComercioHorario = () => {
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '0.35rem',
-                  backgroundColor: '#eff6ff',
-                  border: '1px solid #bfdbfe',
-                  color: '#1d4ed8',
+                  backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  color: '#2563eb',
                   fontSize: '0.78rem',
-                  fontWeight: '600',
+                  fontWeight: '700',
                   padding: '0.35rem 0.7rem',
                   borderRadius: '1rem'
                 }}>
@@ -581,15 +586,15 @@ const ComercioHorario = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            backgroundColor: '#FDFBF7',
-            padding: '0.6rem 0.9rem',
+            backgroundColor: 'var(--color-card-alt)',
+            padding: '0.65rem 0.9rem',
             borderRadius: '0.8rem',
-            border: '1px solid #eee'
+            border: '1px solid var(--color-border)'
           }}>
-            <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#333' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: '600', color: 'var(--color-text)' }}>
               🕒 Horario de hoy ({DIAS_SEMANA[(new Date().getDay() + 6) % 7].label}):
             </span>
-            <span style={{ fontSize: '0.85rem', color: 'var(--color-header-bg)', fontWeight: '700' }}>
+            <span style={{ fontSize: '0.82rem', color: 'var(--color-accent)', fontWeight: '700' }}>
               {horario[DIAS_SEMANA[(new Date().getDay() + 6) % 7].key] || 'No definido'}
             </span>
           </div>
@@ -599,16 +604,16 @@ const ComercioHorario = () => {
         <button
           type="submit"
           style={{
-            backgroundColor: 'var(--color-header-bg)',
+            backgroundColor: 'var(--color-accent)',
             color: 'white',
             border: 'none',
-            padding: '1.1rem',
-            borderRadius: '1.2rem',
+            padding: '1rem',
+            borderRadius: '2rem',
             fontFamily: 'var(--font-main)',
             fontWeight: '700',
             fontSize: '1rem',
             cursor: 'pointer',
-            boxShadow: '0 4px 15px rgba(3, 38, 23, 0.2)',
+            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.15)',
             transition: 'opacity 0.2s'
           }}
         >
@@ -621,9 +626,9 @@ const ComercioHorario = () => {
 };
 
 const templateBtnStyle = {
-  backgroundColor: 'rgba(3, 38, 23, 0.08)',
-  color: 'var(--color-header-bg)',
-  border: 'none',
+  backgroundColor: 'var(--color-card-alt)',
+  color: 'var(--color-text)',
+  border: '1px solid var(--color-border)',
   padding: '0.3rem 0.6rem',
   borderRadius: '0.5rem',
   fontSize: '0.72rem',
@@ -635,8 +640,8 @@ const templateBtnStyle = {
 const fieldLabelStyle = {
   display: 'block',
   fontSize: '0.82rem',
-  fontWeight: '600',
-  color: 'var(--color-header-bg)',
+  fontWeight: '700',
+  color: 'var(--color-text)',
   marginBottom: '0.3rem',
   fontFamily: 'var(--font-main)'
 };
@@ -645,12 +650,13 @@ const inputStyle = {
   width: '100%',
   padding: '0.75rem 0.9rem',
   borderRadius: '0.7rem',
-  border: '1px solid #E8C8CB',
+  border: '1px solid var(--color-border)',
   fontFamily: 'var(--font-main)',
   fontSize: '0.88rem',
-  backgroundColor: 'white',
-  color: '#333',
-  boxSizing: 'border-box'
+  backgroundColor: 'var(--color-input-bg)',
+  color: 'var(--color-text)',
+  boxSizing: 'border-box',
+  outline: 'none'
 };
 
 export default ComercioHorario;

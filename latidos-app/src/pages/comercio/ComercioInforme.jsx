@@ -77,22 +77,24 @@ const ComercioInforme = () => {
 
   const StatBox = ({ title, value, subtext }) => (
     <div style={{
-      backgroundColor: '#F5D3D6',
-      borderRadius: '1rem',
+      backgroundColor: 'var(--color-card)',
+      border: '1px solid var(--color-border)',
+      borderRadius: '1.2rem',
       padding: '1.2rem',
-      flex: '1 1 calc(25% - 1rem)',
-      minWidth: '180px'
+      flex: '1 1 calc(50% - 0.5rem)',
+      minWidth: '150px',
+      boxShadow: 'var(--shadow-card)'
     }}>
-      <p style={{ fontFamily: 'var(--font-main)', fontSize: '0.75rem', color: '#6b4f53', marginBottom: '0.4rem' }}>
+      <p style={{ fontFamily: 'var(--font-main)', fontSize: '0.78rem', color: 'var(--color-text-muted)', marginBottom: '0.4rem', fontWeight: '600' }}>
         {title}
       </p>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem' }}>
-        <p style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', fontWeight: '600', color: 'var(--color-header-bg)', margin: 0, lineHeight: 1 }}>
+        <p style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: '700', color: 'var(--color-text)', margin: 0, lineHeight: 1.1 }}>
           {value}
         </p>
       </div>
       {subtext && (
-        <p style={{ fontFamily: 'var(--font-main)', fontSize: '0.75rem', color: '#A4777C', margin: '0.4rem 0 0' }}>
+        <p style={{ fontFamily: 'var(--font-main)', fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: '0.4rem 0 0', opacity: 0.8 }}>
           {subtext}
         </p>
       )}
@@ -101,38 +103,51 @@ const ComercioInforme = () => {
 
   return (
     <div>
-      <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', color: 'var(--color-header-bg)', marginBottom: '1.5rem', fontWeight: '600' }}>
-        Informe mensual
-      </h2>
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '3rem' }}>
-        <StatBox title="Clientes captados vía LATIDOS" value={stats.clientesMes} subtext="+14 vs. mes anterior" />
-        <StatBox title="Gasto generado" value={`${stats.gastoMes.toFixed(2)} €`} subtext={`ticket medio ${stats.ticketMedio.toFixed(2)} €`} />
-        <StatBox title="Clientes recurrentes" value={`${stats.clientesRecurrentesPct} %`} subtext="2 o más visitas" />
-        <StatBox title="Mejor día de la semana" value={stats.mejorDia} subtext="23 % de las visitas" />
+      <div style={{ marginBottom: '1.5rem' }}>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', color: 'var(--color-text)', margin: 0, fontWeight: '700' }}>
+          Informe mensual
+        </h2>
+        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', margin: '0.2rem 0 0' }}>
+          Estadísticas de impacto y ventas canalizadas a través de LATIDOS.
+        </p>
       </div>
 
-      <div style={{ marginBottom: '1.5rem' }}>
-        <p style={{ fontFamily: 'var(--font-main)', fontSize: '0.8rem', fontWeight: '700', color: '#6b4f53', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.8rem', marginBottom: '2rem' }}>
+        <StatBox title="Clientes vía LATIDOS" value={stats.clientesMes} subtext="Este mes" />
+        <StatBox title="Gasto generado" value={`${stats.gastoMes.toFixed(2)} €`} subtext={`Ticket medio ${stats.ticketMedio.toFixed(2)} €`} />
+        <StatBox title="Clientes recurrentes" value={`${stats.clientesRecurrentesPct} %`} subtext="2 o más visitas" />
+        <StatBox title="Mejor día" value={stats.mejorDia} subtext="Mayor afluencia" />
+      </div>
+
+      <div style={{
+        backgroundColor: 'var(--color-card)',
+        padding: '1.4rem',
+        borderRadius: '1.2rem',
+        border: '1px solid var(--color-border)',
+        boxShadow: 'var(--shadow-card)',
+        marginBottom: '1.5rem'
+      }}>
+        <p style={{ fontFamily: 'var(--font-main)', fontSize: '0.78rem', fontWeight: '700', color: 'var(--color-text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '1.2rem' }}>
           Evolución mensual · Clientes vía LATIDOS
         </p>
-        <div style={{ height: '200px', width: '100%' }}>
+        <div style={{ height: '220px', width: '100%' }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={stats.chartData}>
-              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#6b4f53', fontSize: 12, fontFamily: 'var(--font-main)' }} />
+              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'var(--color-text-muted)', fontSize: 12, fontFamily: 'var(--font-main)' }} />
               <Tooltip 
-                contentStyle={{ borderRadius: '0.8rem', border: 'none', backgroundColor: '#FCECEE', color: 'var(--color-header-bg)' }}
-                itemStyle={{ color: 'var(--color-header-bg)' }}
+                contentStyle={{ borderRadius: '0.8rem', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-card)', color: 'var(--color-text)', boxShadow: 'var(--shadow-card)' }}
+                itemStyle={{ color: 'var(--color-accent)', fontWeight: '700' }}
               />
-              <Line type="monotone" dataKey="clients" stroke="#F5D3D6" strokeWidth={4} dot={{ r: 6, fill: '#E8C8CB', stroke: 'none' }} activeDot={{ r: 8, fill: 'var(--color-header-bg)' }} />
+              <Line type="monotone" dataKey="clients" stroke="var(--color-accent)" strokeWidth={3} dot={{ r: 5, fill: 'var(--color-accent)', stroke: 'none' }} activeDot={{ r: 7, fill: 'var(--color-text)' }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div style={{ backgroundColor: '#F5D3D6', padding: '1rem 1.5rem', borderRadius: '1rem', marginTop: '1rem' }}>
-          <p style={{ fontFamily: 'var(--font-main)', fontSize: '0.85rem', color: 'var(--color-header-bg)', margin: 0, fontWeight: '500' }}>
-            Tu cuota mensual incluye este informe y visibilidad en la app y redes de LATIDOS.
-          </p>
-        </div>
+      </div>
+
+      <div style={{ backgroundColor: 'var(--color-card-alt)', padding: '1rem 1.2rem', borderRadius: '1rem', border: '1px solid var(--color-border)' }}>
+        <p style={{ fontFamily: 'var(--font-main)', fontSize: '0.82rem', color: 'var(--color-text-muted)', margin: 0, fontWeight: '500' }}>
+          💡 Tu cuota mensual incluye este informe detallado y visibilidad preferente en el mapa y la app de LATIDOS.
+        </p>
       </div>
     </div>
   );
