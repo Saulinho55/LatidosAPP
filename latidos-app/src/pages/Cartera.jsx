@@ -218,7 +218,7 @@ const Cartera = () => {
     if (isAuthenticated) {
       fetchComercios().then(setComercios);
     }
-  }, [isAuthenticated, fetchComercios]);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!activeCode) return;

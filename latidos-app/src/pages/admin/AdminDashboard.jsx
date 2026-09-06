@@ -8,7 +8,7 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     fetchAdminStats().then(setStats);
-  }, [fetchAdminStats]);
+  }, []);
 
   if (!stats) return <div style={{ color: 'var(--color-text)' }}>Cargando estadísticas...</div>;
 
