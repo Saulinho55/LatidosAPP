@@ -1,10 +1,8 @@
 import React from 'react';
 import { useLatidos } from '../context/LatidosContext';
-import { formatLatidosAsMoney } from '../i18n';
 
 const Header = ({ latidos = 0 }) => {
-  const { currency = 'EUR', tr } = useLatidos() || {};
-  const valorMonetario = formatLatidosAsMoney(latidos || 0, currency);
+  const { tr } = useLatidos() || {};
 
   return (
     <div style={{
@@ -30,38 +28,12 @@ const Header = ({ latidos = 0 }) => {
         fontSize: '5.5rem',
         fontWeight: '600',
         lineHeight: '1',
-        marginBottom: '0.3rem',
         fontFamily: 'var(--font-display)',
         letterSpacing: '-0.02em',
         color: 'var(--color-header-text)'
       }}>
         {(latidos || 0).toLocaleString('es-ES')}
       </div>
-      {/* Equivalencia en euros */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'baseline',
-        gap: '0.4rem',
-        marginBottom: '0.4rem'
-      }}>
-        <span style={{
-          fontSize: '1.4rem',
-          fontFamily: 'var(--font-display)',
-          fontWeight: '600',
-          opacity: 0.75,
-          color: 'var(--color-header-text)'
-        }}>
-          = {valorMonetario}
-        </span>
-      </div>
-      <p style={{
-        fontSize: '0.88rem',
-        opacity: 0.5,
-        fontFamily: 'var(--font-main)',
-        fontWeight: '300'
-      }}>
-        {tr?.latidosBono || '100 Latidos = 1 € de bono'}
-      </p>
     </div>
   );
 };

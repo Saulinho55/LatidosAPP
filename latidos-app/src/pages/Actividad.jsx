@@ -1,6 +1,5 @@
 import React from 'react';
 import { useLatidos } from '../context/LatidosContext';
-import { formatLatidosAsMoney } from '../i18n';
 
 const Actividad = () => {
   const { activity, steps, currency, tr } = useLatidos();
@@ -121,7 +120,7 @@ const Actividad = () => {
                 </p>
               </div>
 
-              {/* Right: latidos + money */}
+              {/* Right: latidos */}
               <div style={{ textAlign: 'right' }}>
                 <p style={{
                   fontFamily: 'var(--font-display)',
@@ -131,14 +130,6 @@ const Actividad = () => {
                   lineHeight: 1
                 }}>
                   +{item.latidos_ganados || 0} ❤️
-                </p>
-                <p style={{
-                  fontFamily: 'var(--font-main)',
-                  fontSize: '0.75rem',
-                  opacity: 0.5,
-                  marginTop: '0.15rem'
-                }}>
-                  {formatLatidosAsMoney(item.latidos_ganados || 0, currency)}
                 </p>
               </div>
             </div>

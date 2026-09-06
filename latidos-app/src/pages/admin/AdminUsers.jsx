@@ -53,7 +53,13 @@ const AdminUsers = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    const res = await updateUser(editingId, formData);
+    const payload = { ...formData };
+    if (payload.role === 'comercio') {
+      payload.latidos = 0;
+      payload.steps_today = 0;
+      payload.racha = 0;
+    }
+    const res = await updateUser(editingId, payload);
     if (res?.success) {
       setEditingId(null);
       loadData();
@@ -64,7 +70,13 @@ const AdminUsers = () => {
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
-    const res = await createUser(newUserData);
+    const payload = { ...newUserData };
+    if (payload.role === 'comercio') {
+      payload.latidos = 0;
+      payload.steps_today = 0;
+      payload.racha = 0;
+    }
+    const res = await createUser(payload);
     if (res?.success) {
       alert('Usuario creado correctamente');
       setShowCreateForm(false);
@@ -205,8 +217,9 @@ const AdminUsers = () => {
 
             {newUserData.role === 'comercio' && (
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={labelStyle}>Vincular Comercio</label>
+                <label style={labelStyle}>Vincular Comercio *</label>
                 <select
+                  required
                   value={newUserData.comercio_id}
                   onChange={e => setNewUserData({...newUserData, comercio_id: e.target.value})}
                   style={inputStyle}
@@ -219,36 +232,41 @@ const AdminUsers = () => {
               </div>
             )}
 
-            <div>
-              <label style={labelStyle}>Latidos iniciales</label>
-              <input
-                type="number"
-                min="0"
-                value={newUserData.latidos}
-                onChange={e => setNewUserData({...newUserData, latidos: e.target.value})}
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Pasos hoy</label>
-              <input
-                type="number"
-                min="0"
-                value={newUserData.steps_today}
-                onChange={e => setNewUserData({...newUserData, steps_today: e.target.value})}
-                style={inputStyle}
-              />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>Racha de días</label>
-              <input
-                type="number"
-                min="0"
-                value={newUserData.racha}
-                onChange={e => setNewUserData({...newUserData, racha: e.target.value})}
-                style={inputStyle}
-              />
-            </div>
+            {/* Solo se muestran latidos, pasos y racha si el rol NO es comercio */}
+            {newUserData.role !== 'comercio' && (
+              <>
+                <div>
+                  <label style={labelStyle}>Latidos iniciales</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newUserData.latidos}
+                    onChange={e => setNewUserData({...newUserData, latidos: e.target.value})}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Pasos hoy</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newUserData.steps_today}
+                    onChange={e => setNewUserData({...newUserData, steps_today: e.target.value})}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>Racha de días</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newUserData.racha}
+                    onChange={e => setNewUserData({...newUserData, racha: e.target.value})}
+                    style={inputStyle}
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <button
@@ -278,6 +296,7 @@ const AdminUsers = () => {
           const isTargetComercio = u.role === 'comercio';
           const isSelf = u.id === currentUser?.id;
           const isUntouchable = isTargetSuper && !isSuper;
+          const linkedComercio = isTargetComercio && comercios.find(c => Number(c.id) === Number(u.comercio_id));
 
           return (
             <div key={u.id} style={{
@@ -374,10 +393,16 @@ const AdminUsers = () => {
                   </p>
                 </div>
 
-                <div style={{ backgroundColor: 'var(--color-card-alt)', padding: '0.4rem 0.8rem', borderRadius: '2rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <span style={{ fontSize: '0.9rem' }}>❤</span>
-                  <span style={{ fontFamily: 'var(--font-main)', fontWeight: '700', color: 'var(--color-text)', fontSize: '0.9rem' }}>{u.latidos || 0}</span>
-                </div>
+                {!isTargetComercio ? (
+                  <div style={{ backgroundColor: 'var(--color-card-alt)', padding: '0.4rem 0.8rem', borderRadius: '2rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span style={{ fontSize: '0.9rem' }}>❤</span>
+                    <span style={{ fontFamily: 'var(--font-main)', fontWeight: '700', color: 'var(--color-text)', fontSize: '0.9rem' }}>{u.latidos || 0}</span>
+                  </div>
+                ) : (
+                  <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '0.4rem 0.8rem', borderRadius: '2rem', fontSize: '0.82rem', fontWeight: '700' }}>
+                    🏪 {linkedComercio ? linkedComercio.nombre : 'Comercio'}
+                  </div>
+                )}
               </div>
 
               {/* ── Formulario de Edición ── */}
@@ -392,7 +417,7 @@ const AdminUsers = () => {
                       <label style={labelStyle}>Email</label>
                       <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} style={inputStyle} />
                     </div>
-                    <div>
+                    <div style={{ gridColumn: formData.role === 'comercio' ? '1 / 2' : 'auto' }}>
                       <label style={labelStyle}>Rol</label>
                       <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} style={inputStyle}>
                         <option value="user">Usuario</option>
@@ -414,18 +439,22 @@ const AdminUsers = () => {
                       </div>
                     )}
 
-                    <div>
-                      <label style={labelStyle}>Latidos</label>
-                      <input required type="number" value={formData.latidos} onChange={e => setFormData({...formData, latidos: e.target.value})} style={inputStyle} />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Pasos Hoy</label>
-                      <input required type="number" value={formData.steps_today} onChange={e => setFormData({...formData, steps_today: e.target.value})} style={inputStyle} />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Racha</label>
-                      <input required type="number" value={formData.racha} onChange={e => setFormData({...formData, racha: e.target.value})} style={inputStyle} />
-                    </div>
+                    {formData.role !== 'comercio' && (
+                      <>
+                        <div>
+                          <label style={labelStyle}>Latidos</label>
+                          <input required type="number" value={formData.latidos} onChange={e => setFormData({...formData, latidos: e.target.value})} style={inputStyle} />
+                        </div>
+                        <div>
+                          <label style={labelStyle}>Pasos Hoy</label>
+                          <input required type="number" value={formData.steps_today} onChange={e => setFormData({...formData, steps_today: e.target.value})} style={inputStyle} />
+                        </div>
+                        <div>
+                          <label style={labelStyle}>Racha</label>
+                          <input required type="number" value={formData.racha} onChange={e => setFormData({...formData, racha: e.target.value})} style={inputStyle} />
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
@@ -435,15 +464,26 @@ const AdminUsers = () => {
                 </form>
               ) : (
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)', alignItems: 'center' }}>
-                  <div>
-                    <p style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontFamily: 'var(--font-main)' }}>Pasos hoy</p>
-                    <p style={{ fontFamily: 'var(--font-display)', fontWeight: '600', color: 'var(--color-text)' }}>{u.steps_today || 0}</p>
-                  </div>
-                  <div>
-                    <p style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontFamily: 'var(--font-main)' }}>Racha</p>
-                    <p style={{ fontFamily: 'var(--font-display)', fontWeight: '600', color: 'var(--color-text)' }}>{u.racha || 0} d</p>
-                  </div>
-                  <div style={{ flex: 1 }}>
+                  {isTargetComercio ? (
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontFamily: 'var(--font-main)' }}>Comercio Vinculado</p>
+                      <p style={{ fontFamily: 'var(--font-display)', fontWeight: '600', color: 'var(--color-text)', fontSize: '0.95rem' }}>
+                        {linkedComercio ? `${linkedComercio.emoji} ${linkedComercio.nombre} (${linkedComercio.categoria})` : 'Sin comercio asignado'}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <p style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontFamily: 'var(--font-main)' }}>Pasos hoy</p>
+                        <p style={{ fontFamily: 'var(--font-display)', fontWeight: '600', color: 'var(--color-text)' }}>{u.steps_today || 0}</p>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontFamily: 'var(--font-main)' }}>Racha</p>
+                        <p style={{ fontFamily: 'var(--font-display)', fontWeight: '600', color: 'var(--color-text)' }}>{u.racha || 0} d</p>
+                      </div>
+                    </>
+                  )}
+                  <div style={{ flex: isTargetComercio ? 0 : 1 }}>
                     <p style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontFamily: 'var(--font-main)' }}>Registrado</p>
                     <p style={{ fontFamily: 'var(--font-display)', fontWeight: '600', color: 'var(--color-text)', fontSize: '0.85rem' }}>
                       {u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Activo'}
