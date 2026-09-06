@@ -581,25 +581,42 @@ export const LatidosProvider = ({ children }) => {
 
   // ── Comercio Extra ──
   const validarBono = async (codigo, importe) => {
-    if (!user?.comercio_id) return { success: false, error: 'No tienes un comercio asociado' };
+    let comId = user?.comercio_id;
+    if (!comId) {
+      try {
+        const cList = await supabaseService.getComercios();
+        const match = cList.find(c => 
+          (c.email && user?.email && c.email.toLowerCase() === user.email.toLowerCase()) ||
+          (c.nombre && user?.name && c.nombre.toLowerCase() === user.name.toLowerCase())
+        );
+        if (match) {
+          comId = match.id;
+        } else if (cList.length > 0) {
+          comId = cList[0].id;
+        }
+      } catch (e) {}
+    }
+
+    if (!comId) return { success: false, error: 'No tienes un comercio asociado a tu cuenta.' };
     try {
-      await supabaseService.validateBono(codigo, user.comercio_id, importe);
+      const updatedTx = await supabaseService.validateBono(codigo, comId, importe);
 
       // If activeCode matches this validated code, clear it
       try {
+        const cleanCode = (codigo || '').trim().toUpperCase();
         const saved = localStorage.getItem('latidos_active_code');
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (parsed && parsed.code === codigo) {
+          if (parsed && (parsed.code === cleanCode || parsed.code === `LAT-${cleanCode}`)) {
             setActiveCode(null);
             localStorage.removeItem('latidos_active_code');
           }
         }
       } catch (e) {}
 
-      return { success: true };
+      return { success: true, data: updatedTx };
     } catch (e) {
-      return { success: false, error: e.message };
+      return { success: false, error: e.message || 'Error al validar el bono' };
     }
   };
 

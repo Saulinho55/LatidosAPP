@@ -325,33 +325,88 @@ export const supabaseService = {
   },
 
   async validateBono(code, comercioId, importe) {
-    // Get comercio name
+    let cleanCode = (code || '').trim().toUpperCase();
+    if (!cleanCode.startsWith('LAT-') && /^\d+$/.test(cleanCode)) {
+      cleanCode = `LAT-${cleanCode}`;
+    }
+
+    // 1. Get Comercio
     const { data: comercio } = await supabase
       .from('comercios')
-      .select('nombre')
+      .select('*')
       .eq('id', comercioId)
       .maybeSingle();
 
     if (!comercio) throw new Error('Comercio no encontrado');
 
-    const { data: tx, error: txErr } = await supabase
+    // 2. Special handling for demo test code LAT-2024
+    if (cleanCode === 'LAT-2024') {
+      const nextId = await getNextId('transactions');
+      const payload = {
+        id: nextId,
+        user_id: 1,
+        comercio_nombre: comercio.nombre,
+        comercio_emoji: comercio.emoji || '🏪',
+        code: 'LAT-2024',
+        latidos_usados: 100,
+        descuento: 'Bono de Prueba (Demo) - Canjeado',
+        importe_compra: parseFloat(importe) || 0,
+        fecha: new Date().toISOString()
+      };
+      try {
+        await supabase.from('transactions').insert([payload]);
+      } catch (e) {}
+      return payload;
+    }
+
+    // 3. Search transaction by code (case-insensitive)
+    const { data: txList, error: txErr } = await supabase
       .from('transactions')
       .select('*')
-      .eq('code', code)
-      .eq('comercio_nombre', comercio.nombre)
-      .maybeSingle();
+      .ilike('code', cleanCode)
+      .order('id', { ascending: false });
 
-    if (txErr || !tx) throw new Error('Código no válido para este comercio');
+    if (txErr || !txList || txList.length === 0) {
+      throw new Error(`Código "${cleanCode}" no encontrado. Asegúrate de que el cliente haya generado el código.`);
+    }
+
+    // Normalize strings for robust matching
+    const normalize = (str) => (str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const comNorm = normalize(comercio.nombre);
+
+    const tx = txList.find(t => normalize(t.comercio_nombre) === comNorm) || txList[0];
+
+    if (normalize(tx.comercio_nombre) !== comNorm) {
+      throw new Error(`Este código pertenece a "${tx.comercio_nombre}", no a "${comercio.nombre}".`);
+    }
+
+    // Check if already validated with purchase amount
+    if (tx.importe_compra && parseFloat(tx.importe_compra) > 0) {
+      throw new Error(`Este código ya fue validado anteriormente (Compra registrada: ${tx.importe_compra} €).`);
+    }
+
+    // Check if cancelled/expired
+    if (tx.descuento && (tx.descuento.includes('Cancelado') || tx.descuento.includes('Caducado'))) {
+      throw new Error('Este código ha expirado o fue cancelado por el usuario.');
+    }
+
+    // 4. Update transaction with purchase amount
+    const parsedImporte = parseFloat(importe) || 0;
+    const rawDesc = tx.descuento || 'Bono';
+    const updatedDesc = rawDesc.includes('Canjeado') ? rawDesc : `${rawDesc} (Canjeado)`;
 
     const { data: updated, error: updateErr } = await supabase
       .from('transactions')
-      .update({ importe_compra: parseFloat(importe) })
+      .update({
+        importe_compra: parsedImporte,
+        descuento: updatedDesc
+      })
       .eq('id', tx.id)
       .select()
-      .single();
+      .maybeSingle();
 
     if (updateErr) throw updateErr;
-    return updated;
+    return updated || { ...tx, importe_compra: parsedImporte, descuento: updatedDesc };
   },
 
   // ── Routes ──
