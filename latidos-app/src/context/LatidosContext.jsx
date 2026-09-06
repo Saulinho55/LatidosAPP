@@ -292,14 +292,25 @@ export const LatidosProvider = ({ children }) => {
     const now = Date.now();
     const expiresAt = now + 600 * 1000; // 10 minutes
 
+    const currentUid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10) || 1;
+    
+    // Ensure numeric descuento for Supabase schema
+    let descuentoNum = 0;
+    if (typeof bono?.descuento === 'number') descuentoNum = bono.descuento;
+    else if (typeof comercio?.descuento === 'number') descuentoNum = comercio.descuento;
+    else if (parseFloat(bono?.descuento)) descuentoNum = parseFloat(bono.descuento);
+    else if (parseFloat(comercio?.descuento)) descuentoNum = parseFloat(comercio.descuento);
+    else descuentoNum = Math.max(1, Math.round(latidosRequeridos / 100));
+
     let txId = null;
     const txData = {
-      user_id: userId,
+      user_id: currentUid,
       comercio_nombre: comercio.nombre,
       comercio_emoji: comercio.emoji || '🏪',
       code,
       latidos_usados: latidosRequeridos,
-      descuento: bono.titulo,
+      descuento: descuentoNum,
+      importe_compra: null,
       fecha: new Date().toISOString()
     };
 
@@ -318,7 +329,8 @@ export const LatidosProvider = ({ children }) => {
       comercioNombre: comercio.nombre,
       comercioEmoji: comercio.emoji || '🏪',
       latidosUsados: latidosRequeridos,
-      descuento: bono.titulo,
+      descuento: bono?.titulo || `${descuentoNum}€ de descuento`,
+      descuentoValor: descuentoNum,
       expiresAt,
       createdAt: new Date().toISOString(),
       txId

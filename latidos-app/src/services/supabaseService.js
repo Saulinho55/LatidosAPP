@@ -292,6 +292,10 @@ export const supabaseService = {
     if (!payload.id) {
       payload.id = await getNextId('transactions');
     }
+    // Ensure numeric descuento
+    if (typeof payload.descuento !== 'number') {
+      payload.descuento = parseFloat(payload.descuento) || 1;
+    }
 
     const { data, error } = await supabase
       .from('transactions')
@@ -360,7 +364,7 @@ export const supabaseService = {
         comercio_emoji: comercio.emoji || '🏪',
         code: 'LAT-2024',
         latidos_usados: 100,
-        descuento: 'Bono de Prueba (Demo) - Canjeado',
+        descuento: parseFloat(comercio.descuento) || 2,
         importe_compra: parseFloat(importe) || 0,
         fecha: new Date().toISOString()
       };
@@ -396,28 +400,20 @@ export const supabaseService = {
       throw new Error(`Este código ya fue validado anteriormente (Compra registrada: ${tx.importe_compra} €).`);
     }
 
-    // Check if cancelled/expired
-    if (tx.descuento && (tx.descuento.includes('Cancelado') || tx.descuento.includes('Caducado'))) {
-      throw new Error('Este código ha expirado o fue cancelado por el usuario.');
-    }
-
     // 4. Update transaction with purchase amount
     const parsedImporte = parseFloat(importe) || 0;
-    const rawDesc = tx.descuento || 'Bono';
-    const updatedDesc = rawDesc.includes('Canjeado') ? rawDesc : `${rawDesc} (Canjeado)`;
 
     const { data: updated, error: updateErr } = await supabase
       .from('transactions')
       .update({
-        importe_compra: parsedImporte,
-        descuento: updatedDesc
+        importe_compra: parsedImporte
       })
       .eq('id', tx.id)
       .select()
       .maybeSingle();
 
     if (updateErr) throw updateErr;
-    return updated || { ...tx, importe_compra: parsedImporte, descuento: updatedDesc };
+    return updated || { ...tx, importe_compra: parsedImporte };
   },
 
   // ── Routes ──

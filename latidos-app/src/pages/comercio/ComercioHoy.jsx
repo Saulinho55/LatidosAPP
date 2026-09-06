@@ -205,7 +205,7 @@ const ComercioHoy = () => {
                         {tx.code}
                       </td>
                       <td style={{ padding: '0.9rem 1rem', color: '#333', fontWeight: '600' }}>
-                        {tx.descuento}
+                        {typeof tx.descuento === 'number' ? `${tx.descuento} € dto.` : tx.descuento} <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({tx.latidos_usados || 0} ❤)</span>
                       </td>
                       <td style={{ padding: '0.9rem 1rem' }}>
                         {isValidated ? (
