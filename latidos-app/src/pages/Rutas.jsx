@@ -13,48 +13,197 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
 });
 
-// Custom icon for checkpoint points (green)
-const pointIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-// Live pulsing green user GPS icon
-const userGreenMarker = L.divIcon({
-  className: '',
-  html: `
-    <div style="position: relative; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
-      <div style="position: absolute; inset: 0; background: rgba(34, 197, 94, 0.45); border-radius: 50%; animation: pulseRing 1.5s infinite ease-out;"></div>
-      <div style="position: relative; width: 16px; height: 16px; background: #22c55e; border: 3px solid white; border-radius: 50%; box-shadow: 0 2px 10px rgba(34,197,94,0.5);"></div>
-    </div>
-  `,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16]
-});
-
-// Custom icon for commerce points of interest
-const createShopMarker = (emoji, color = '#22c55e') => L.divIcon({
-  className: '',
+// Native SVG / CSS Leaflet Marker Icons in vibrant Green
+const createPointMarker = (num = 1) => L.divIcon({
+  className: 'custom-point-marker',
   html: `
     <div style="
-      width: 32px; height: 32px;
-      background: white;
-      border: 2px solid ${color};
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.1rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-    ">${emoji}</div>
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: translate(-50%, -100%);
+      cursor: pointer;
+    ">
+      <div style="
+        background: linear-gradient(135deg, #22c55e, #15803d);
+        color: white;
+        min-width: 32px;
+        height: 32px;
+        padding: 0 6px;
+        border-radius: 16px;
+        border: 2.5px solid white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 0.85rem;
+        box-shadow: 0 4px 12px rgba(22, 163, 74, 0.5);
+      ">
+        📍 ${num}
+      </div>
+      <div style="
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 7px solid #15803d;
+        margin-top: -1px;
+      "></div>
+    </div>
   `,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16]
+  iconSize: [0, 0],
+  iconAnchor: [0, 0],
+  popupAnchor: [0, -38]
 });
 
-// Haversine formula to compute distance in meters between two coordinates
+const startMarkerIcon = L.divIcon({
+  className: 'custom-start-marker',
+  html: `
+    <div style="
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: translate(-50%, -100%);
+    ">
+      <div style="
+        background: #22c55e;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 14px;
+        border: 2.5px solid white;
+        font-weight: 800;
+        font-size: 0.8rem;
+        box-shadow: 0 4px 12px rgba(34, 197, 94, 0.5);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+      ">
+        🚩 Inicio
+      </div>
+      <div style="
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 7px solid #22c55e;
+        margin-top: -1px;
+      "></div>
+    </div>
+  `,
+  iconSize: [0, 0],
+  iconAnchor: [0, 0],
+  popupAnchor: [0, -34]
+});
+
+const endMarkerIcon = L.divIcon({
+  className: 'custom-end-marker',
+  html: `
+    <div style="
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: translate(-50%, -100%);
+    ">
+      <div style="
+        background: #0f172a;
+        color: #22c55e;
+        padding: 5px 10px;
+        border-radius: 14px;
+        border: 2.5px solid #22c55e;
+        font-weight: 800;
+        font-size: 0.8rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+      ">
+        🏁 Meta
+      </div>
+      <div style="
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 7px solid #0f172a;
+        margin-top: -1px;
+      "></div>
+    </div>
+  `,
+  iconSize: [0, 0],
+  iconAnchor: [0, 0],
+  popupAnchor: [0, -34]
+});
+
+const userGreenMarker = L.divIcon({
+  className: 'custom-user-marker',
+  html: `
+    <div style="
+      position: relative;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform: translate(-50%, -50%);
+    ">
+      <div style="
+        position: absolute;
+        inset: 0;
+        background: rgba(34, 197, 94, 0.4);
+        border-radius: 50%;
+        animation: pulseRing 1.6s infinite ease-out;
+      "></div>
+      <div style="
+        position: relative;
+        width: 18px;
+        height: 18px;
+        background: #22c55e;
+        border: 3px solid white;
+        border-radius: 50%;
+        box-shadow: 0 2px 10px rgba(34,197,94,0.6);
+      "></div>
+    </div>
+  `,
+  iconSize: [0, 0],
+  iconAnchor: [0, 0],
+  popupAnchor: [0, -20]
+});
+
+// Helper for safe path and points extraction
+const getSafePath = (rt) => {
+  if (!rt) return [];
+  if (Array.isArray(rt.path)) return rt.path;
+  if (typeof rt.path === 'string') {
+    try {
+      const parsed = JSON.parse(rt.path);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  return [];
+};
+
+const getSafePoints = (rt) => {
+  if (!rt) return [];
+  if (Array.isArray(rt.points)) return rt.points;
+  if (typeof rt.points === 'string') {
+    try {
+      const parsed = JSON.parse(rt.points);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  return [];
+};
+
+// Haversine formula to compute real-time distance in meters between two coordinates
 const haversineDist = (posA, posB) => {
   if (!posA || !posB) return 0;
   const lat1 = posA.lat !== undefined ? posA.lat : posA[0];
@@ -75,13 +224,14 @@ const haversineDist = (posA, posB) => {
 };
 
 const formatDistance = (meters) => {
+  if (!meters || meters <= 0) return '0 m';
   if (meters >= 1000) return `${(meters / 1000).toFixed(2).replace('.', ',')} km`;
   return `${Math.round(meters)} m`;
 };
 
 const formatTime = (seconds) => {
-  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-  const s = (seconds % 60).toString().padStart(2, '0');
+  const m = Math.floor((seconds || 0) / 60).toString().padStart(2, '0');
+  const s = Math.floor((seconds || 0) % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
 };
 
@@ -93,7 +243,7 @@ const Recenter = ({ lat, lon }) => {
   return null;
 };
 
-// Default recommended popular routes
+// Default recommended popular routes with rich points
 const DEFAULT_POPULAR_ROUTES = [
   {
     id: 'pop-1',
@@ -116,38 +266,39 @@ const DEFAULT_POPULAR_ROUTES = [
   },
   {
     id: 'pop-2',
-    name: 'Paseo Comercial Guiniguada',
+    name: 'Paseo Parque de San Juan',
     distance: 2.40,
     duration: 1800,
     latidos_earned: 31,
     points: [
-      { lat: 28.0055, lon: -15.4162, name: 'Calle Real de Telde' },
-      { lat: 28.0034, lon: -15.4144, name: 'Cafetería Guiniguada' },
-      { lat: 28.0015, lon: -15.4130, name: 'Av. de las Canarias' }
+      { lat: 28.0055, lon: -15.4162, name: 'Plaza de San Juan' },
+      { lat: 28.0038, lon: -15.4148, name: 'Paseo de la Fraternidad' },
+      { lat: 28.0015, lon: -15.4130, name: 'Mirador del Valle' }
     ],
     path: [
       { lat: 28.0055, lon: -15.4162 },
       { lat: 28.0048, lon: -15.4158 },
-      { lat: 28.0034, lon: -15.4144 },
+      { lat: 28.0038, lon: -15.4148 },
+      { lat: 28.0025, lon: -15.4138 },
       { lat: 28.0015, lon: -15.4130 }
     ]
   }
 ];
 
-const LiveMap = ({ position, route, points, comercios, targetRoute, onRemovePoint, tr }) => {
+const LiveMap = ({ position, route, points, targetRoute, targetPoints, onRemovePoint, tr }) => {
   const currentPos = position || { lat: 28.0048, lon: -15.4158 };
-  const positions = route.map(p => [p.lat, p.lon]);
-  const targetPositions = targetRoute ? targetRoute.map(p => [p.lat, p.lon]) : [];
+  const positions = (route || []).map(p => [p.lat, p.lon]);
+  const targetPositions = (targetRoute || []).map(p => [p.lat, p.lon]);
   
   return (
-    <div style={{ height: '300px', width: 'calc(100% - 2rem)', borderRadius: '1.5rem', overflow: 'hidden', margin: '0 1rem 0.75rem', boxShadow: 'var(--shadow-card)', zIndex: 0 }}>
+    <div style={{ height: '320px', width: 'calc(100% - 2rem)', borderRadius: '1.5rem', overflow: 'hidden', margin: '0 1rem 0.75rem', boxShadow: 'var(--shadow-card)', zIndex: 0, position: 'relative' }}>
       <MapContainer center={[currentPos.lat, currentPos.lon]} zoom={16} style={{ height: '100%', width: '100%', zIndex: 1 }} zoomControl={false}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
         <Recenter lat={currentPos.lat} lon={currentPos.lon} />
 
-        {/* Target route guide (blue dashed) */}
+        {/* Target route guide (blue dashed line) */}
         {targetPositions.length > 0 && (
-          <Polyline positions={targetPositions} color="#3b82f6" weight={5} opacity={0.65} dashArray="8, 8" />
+          <Polyline positions={targetPositions} color="#3b82f6" weight={5} opacity={0.7} dashArray="8, 8" />
         )}
 
         {/* Live user walked route in bright green */}
@@ -155,70 +306,66 @@ const LiveMap = ({ position, route, points, comercios, targetRoute, onRemovePoin
           <Polyline positions={positions} color="#22c55e" weight={6} opacity={0.95} />
         )}
         
-        {/* User GPS Live Marker in Green */}
+        {/* User GPS Live Marker in pulsing Green */}
         <Marker position={[currentPos.lat, currentPos.lon]} icon={userGreenMarker}>
           <Popup>
-            <div style={{ textAlign: 'center', fontWeight: 'bold', color: '#16a34a' }}>
-              📍 {tr?.tuEstasAqui || 'Tu posición GPS'}
+            <div style={{ textAlign: 'center', padding: '0.2rem' }}>
+              <p style={{ margin: 0, fontWeight: 'bold', color: '#16a34a', fontSize: '0.9rem' }}>
+                🟢 {tr?.tuEstasAqui || 'Tu posición GPS'}
+              </p>
             </div>
           </Popup>
         </Marker>
-        
-        {/* Custom checkpoints added by user */}
-        {points.map((pt, i) => {
+
+        {/* Target route checkpoints when replicating a route */}
+        {targetPoints && targetPoints.map((pt, i) => {
           const distToPt = haversineDist(currentPos, pt);
           return (
-            <Marker key={`pt-${i}`} position={[pt.lat, pt.lon]} icon={pointIcon}>
+            <Marker key={`tgt-pt-${i}`} position={[pt.lat, pt.lon]} icon={createPointMarker(i + 1)}>
               <Popup>
                 <div style={{ textAlign: 'center', padding: '0.2rem' }}>
                   <p style={{ margin: '0 0 0.2rem', fontWeight: 'bold', color: '#15803d' }}>
-                    📍 {pt.name || `${tr?.puntoAnadido || 'Punto'} ${i+1}`}
+                    📍 {pt.name || `Punto ${i + 1}`}
                   </p>
-                  <p style={{ margin: '0 0 0.4rem', fontSize: '0.8rem', color: '#16a34a', fontWeight: '700' }}>
-                    a {formatDistance(distToPt)}
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: '#16a34a', fontWeight: '800' }}>
+                    🟢 Distancia: {formatDistance(distToPt)}
                   </p>
-                  <button
-                    onClick={() => onRemovePoint(i)}
-                    style={{
-                      backgroundColor: '#e74c3c',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '0.5rem',
-                      padding: '0.3rem 0.6rem',
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                      fontWeight: '600'
-                    }}
-                  >
-                    🗑️ {tr?.eliminar || 'Eliminar'}
-                  </button>
                 </div>
               </Popup>
             </Marker>
           );
         })}
-
-        {/* Nearby shops & points of interest */}
-        {comercios && comercios.map((c) => {
-          if (!c.lat || !c.lon) return null;
-          const distToShop = haversineDist(currentPos, { lat: c.lat, lon: c.lon });
+        
+        {/* Custom checkpoints added live by the user */}
+        {points && points.map((pt, i) => {
+          const distToPt = haversineDist(currentPos, pt);
           return (
-            <Marker
-              key={`shop-${c.id}`}
-              position={[c.lat, c.lon]}
-              icon={createShopMarker(c.emoji || '🏪', c.color || '#22c55e')}
-            >
+            <Marker key={`live-pt-${i}`} position={[pt.lat, pt.lon]} icon={createPointMarker(i + 1)}>
               <Popup>
                 <div style={{ textAlign: 'center', padding: '0.2rem' }}>
-                  <p style={{ margin: '0 0 0.1rem', fontWeight: 'bold', color: 'var(--color-text)' }}>
-                    {c.emoji} {c.nombre}
+                  <p style={{ margin: '0 0 0.2rem', fontWeight: 'bold', color: '#15803d' }}>
+                    📍 {pt.name || `${tr?.puntoAnadido || 'Punto'} ${i + 1}`}
                   </p>
-                  <p style={{ margin: '0 0 0.3rem', fontSize: '0.78rem', color: '#16a34a', fontWeight: '700' }}>
-                    🟢 a {formatDistance(distToShop)}
+                  <p style={{ margin: '0 0 0.4rem', fontSize: '0.85rem', color: '#16a34a', fontWeight: '800' }}>
+                    🟢 Distancia: {formatDistance(distToPt)}
                   </p>
-                  <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
-                    {c.categoria} • {c.descuento}% desc.
-                  </p>
+                  {onRemovePoint && (
+                    <button
+                      onClick={() => onRemovePoint(i)}
+                      style={{
+                        backgroundColor: '#e74c3c',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '0.5rem',
+                        padding: '0.3rem 0.6rem',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      🗑️ {tr?.eliminar || 'Eliminar'}
+                    </button>
+                  )}
                 </div>
               </Popup>
             </Marker>
@@ -229,35 +376,75 @@ const LiveMap = ({ position, route, points, comercios, targetRoute, onRemovePoin
   );
 };
 
-const RouteMap = ({ routePath, routePoints, tr }) => {
-  if (!routePath || routePath.length === 0) return null;
-  const positions = routePath.map(p => [p.lat, p.lon]);
-  const center = positions[Math.floor(positions.length / 2)];
+const RouteMap = ({ routePath, routePoints, currentPos, tr }) => {
+  const safePath = getSafePath({ path: routePath });
+  const safePoints = getSafePoints({ points: routePoints });
+
+  if (safePath.length === 0) return null;
+  const positions = safePath.map(p => [p.lat, p.lon]);
+  const center = positions[Math.floor(positions.length / 2)] || [28.0048, -15.4158];
 
   return (
-    <div style={{ height: '220px', width: '100%', borderRadius: '1rem', overflow: 'hidden', marginTop: '1rem', zIndex: 0 }}>
+    <div style={{ height: '220px', width: '100%', borderRadius: '1rem', overflow: 'hidden', marginTop: '0.8rem', zIndex: 0 }}>
       <MapContainer center={center} zoom={15} style={{ height: '100%', width: '100%', zIndex: 1 }} zoomControl={false}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
         <Polyline positions={positions} color="#22c55e" weight={5} opacity={0.9} />
         
-        <Marker position={positions[0]} icon={pointIcon}><Popup>{tr?.inicioRuta || 'Inicio de la ruta'}</Popup></Marker>
-        <Marker position={positions[positions.length - 1]} icon={pointIcon}><Popup>{tr?.finRuta || 'Fin de la ruta'}</Popup></Marker>
+        {/* Start and End Markers */}
+        <Marker position={positions[0]} icon={startMarkerIcon}>
+          <Popup>
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ margin: '0 0 0.2rem', fontWeight: 'bold', color: '#16a34a' }}>🚩 {tr?.inicioRuta || 'Inicio de la ruta'}</p>
+              {currentPos && (
+                <p style={{ margin: 0, fontSize: '0.8rem', color: '#16a34a', fontWeight: '700' }}>
+                  Distancia: {formatDistance(haversineDist(currentPos, positions[0]))}
+                </p>
+              )}
+            </div>
+          </Popup>
+        </Marker>
 
-        {routePoints && routePoints.map((pt, i) => (
-          <Marker key={i} position={[pt.lat, pt.lon]} icon={pointIcon}>
-            <Popup>{pt.name || `Punto ${i+1}`}</Popup>
-          </Marker>
-        ))}
+        <Marker position={positions[positions.length - 1]} icon={endMarkerIcon}>
+          <Popup>
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ margin: '0 0 0.2rem', fontWeight: 'bold', color: '#0f172a' }}>🏁 {tr?.finRuta || 'Fin de la ruta'}</p>
+              {currentPos && (
+                <p style={{ margin: 0, fontSize: '0.8rem', color: '#16a34a', fontWeight: '700' }}>
+                  Distancia: {formatDistance(haversineDist(currentPos, positions[positions.length - 1]))}
+                </p>
+              )}
+            </div>
+          </Popup>
+        </Marker>
+
+        {/* Checkpoint Markers */}
+        {safePoints.map((pt, i) => {
+          const dist = currentPos ? haversineDist(currentPos, pt) : 0;
+          return (
+            <Marker key={i} position={[pt.lat, pt.lon]} icon={createPointMarker(i + 1)}>
+              <Popup>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ margin: '0 0 0.2rem', fontWeight: 'bold', color: '#15803d' }}>📍 {pt.name || `Punto ${i+1}`}</p>
+                  {currentPos && (
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#16a34a', fontWeight: '700' }}>
+                      Distancia: {formatDistance(dist)}
+                    </p>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
     </div>
   );
 };
 
 const EditRouteModal = ({ route, onClose, onSave, tr }) => {
-  const [name, setName] = useState(route.name);
-  const [points, setPoints] = useState(route.points || []);
+  const [name, setName] = useState(route?.name || '');
+  const [points, setPoints] = useState(getSafePoints(route));
   
-  const positions = (route.path || []).map(p => [p.lat, p.lon]);
+  const positions = getSafePath(route).map(p => [p.lat, p.lon]);
   const center = positions.length > 0 ? positions[Math.floor(positions.length / 2)] : [28.0048, -15.4158];
 
   const MapEvents = () => {
@@ -286,7 +473,7 @@ const EditRouteModal = ({ route, onClose, onSave, tr }) => {
           style={{ width: '100%', padding: '0.9rem', borderRadius: '1rem', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text)', marginBottom: '1.5rem', fontSize: '1rem', outline: 'none' }}
         />
 
-        <label style={{ color: 'var(--color-detail)', fontSize: '0.85rem', marginBottom: '0.3rem', display: 'block' }}>{tr?.puntosInteres || 'Puntos de interés'} (Toca el mapa para añadir)</label>
+        <label style={{ color: 'var(--color-detail)', fontSize: '0.85rem', marginBottom: '0.3rem', display: 'block' }}>{tr?.puntosInteres || 'Puntos de control'} (Toca el mapa para añadir)</label>
         <div style={{ height: '250px', width: '100%', borderRadius: '1rem', overflow: 'hidden', marginBottom: '1.5rem', zIndex: 0 }}>
           <MapContainer center={center} zoom={15} style={{ height: '100%', width: '100%', zIndex: 1 }} zoomControl={false}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -297,7 +484,7 @@ const EditRouteModal = ({ route, onClose, onSave, tr }) => {
               <Marker 
                 key={i} 
                 position={[pt.lat, pt.lon]} 
-                icon={pointIcon}
+                icon={createPointMarker(i + 1)}
                 eventHandlers={{
                   click: () => removePoint(i)
                 }}
@@ -310,7 +497,7 @@ const EditRouteModal = ({ route, onClose, onSave, tr }) => {
 
         <div style={{ display: 'flex', gap: '0.6rem' }}>
           <button onClick={onClose} style={{ flex: 1, padding: '0.8rem', borderRadius: '2rem', border: 'none', backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text)', fontWeight: '600', cursor: 'pointer' }}>{tr?.cancelar || 'Cancelar'}</button>
-          <button onClick={() => onSave(route.id, { name, points })} style={{ flex: 1, padding: '0.8rem', borderRadius: '2rem', border: 'none', backgroundColor: 'var(--color-accent)', color: 'white', fontWeight: '600', cursor: 'pointer' }}>{tr?.guardar || 'Guardar'}</button>
+          <button onClick={() => onSave(route.id, { name, points })} style={{ flex: 1, padding: '0.8rem', borderRadius: '2rem', border: 'none', backgroundColor: '#22c55e', color: 'white', fontWeight: '700', cursor: 'pointer' }}>{tr?.guardar || 'Guardar'}</button>
         </div>
       </div>
     </div>
@@ -318,7 +505,7 @@ const EditRouteModal = ({ route, onClose, onSave, tr }) => {
 };
 
 const RutasPage = () => {
-  const { isAuthenticated, savedRoutes, saveRoute, deleteRoute, updateRoute, ganarLatidos, updateSteps, steps: totalSteps, fetchComercios, tr } = useLatidos();
+  const { isAuthenticated, savedRoutes, saveRoute, deleteRoute, updateRoute, ganarLatidos, updateSteps, steps: totalSteps, tr } = useLatidos();
   const navigate = useNavigate();
 
   const {
@@ -336,7 +523,6 @@ const RutasPage = () => {
     resetRoute
   } = useGeolocation();
 
-  const [comercios, setComercios] = useState([]);
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef(null);
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -347,11 +533,7 @@ const RutasPage = () => {
   const [routeName, setRouteName] = useState('');
   const [expandedRouteId, setExpandedRouteId] = useState(null);
   const [replicatedRoute, setReplicatedRoute] = useState(null);
-
-  // Load comercios for points of interest
-  useEffect(() => {
-    fetchComercios().then(data => setComercios(data || []));
-  }, []);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isTracking) {
@@ -388,32 +570,42 @@ const RutasPage = () => {
   };
 
   const handleSaveRoute = async () => {
-    const latidosEarned = Math.floor(routeSteps / 100);
-    const finalRoute = route.length > 0 
-      ? route 
-      : (position ? [{ lat: position.lat, lon: position.lon }] : [{ lat: 28.0048, lon: -15.4158 }]);
+    if (isSaving) return;
+    setIsSaving(true);
 
-    await saveRoute({
-      name: (routeName && routeName.trim()) || `Paseo ${new Date().toLocaleDateString('es-ES')}`,
-      distance: (distanceM || 0) / 1000,
-      duration: elapsed || 1,
-      latidos_earned: latidosEarned,
-      path: finalRoute,
-      points: points
-    });
+    try {
+      const latidosEarned = Math.floor(routeSteps / 100);
+      const finalRoute = route && route.length > 0 
+        ? route 
+        : (position ? [{ lat: position.lat, lon: position.lon }] : [{ lat: 28.0048, lon: -15.4158 }]);
 
-    if (latidosEarned > 0) {
-      await ganarLatidos(latidosEarned);
+      await saveRoute({
+        name: (routeName && routeName.trim()) || `Paseo ${new Date().toLocaleDateString('es-ES')}`,
+        distance: (distanceM || 0) / 1000,
+        duration: elapsed || 1,
+        latidos_earned: latidosEarned,
+        path: finalRoute,
+        points: points || []
+      });
+
+      if (latidosEarned > 0) {
+        await ganarLatidos(latidosEarned);
+      }
+      if (routeSteps > 0) {
+        await updateSteps((totalSteps || 0) + routeSteps);
+      }
+
+      setShowSaveModal(false);
+      setReplicatedRoute(null);
+      resetRoute();
+      setElapsed(0);
+      setIsSessionActive(false);
+    } catch (err) {
+      console.error('Error guardando la ruta:', err);
+      alert('Hubo un error al guardar la ruta: ' + (err.message || err));
+    } finally {
+      setIsSaving(false);
     }
-    if (routeSteps > 0) {
-      await updateSteps((totalSteps || 0) + routeSteps);
-    }
-
-    setShowSaveModal(false);
-    setReplicatedRoute(null);
-    resetRoute();
-    setElapsed(0);
-    setIsSessionActive(false);
   };
 
   const handleReplicar = (rt) => {
@@ -450,41 +642,58 @@ const RutasPage = () => {
     return (
       <div style={{ padding: '4rem 1.5rem', textAlign: 'center' }}>
         <h2 style={{ fontFamily: 'var(--font-display)', marginBottom: '1rem', color: 'var(--color-text)' }}>{tr?.cuenta || 'Debes iniciar sesión'}</h2>
-        <button onClick={() => navigate('/login')} style={{ backgroundColor: 'var(--color-accent)', color: 'white', padding: '0.8rem 1.5rem', borderRadius: '2rem', fontFamily: 'var(--font-main)', fontWeight: '600', border: 'none', cursor: 'pointer' }}>Ir a Iniciar Sesión</button>
+        <button onClick={() => navigate('/login')} style={{ backgroundColor: '#22c55e', color: 'white', padding: '0.8rem 1.5rem', borderRadius: '2rem', fontFamily: 'var(--font-main)', fontWeight: '600', border: 'none', cursor: 'pointer' }}>Ir a Iniciar Sesión</button>
       </div>
     );
   }
 
-  const isRouteActive = isSessionActive || isTracking || route.length > 0 || replicatedRoute !== null;
+  const isRouteActive = isSessionActive || isTracking || (route && route.length > 0) || replicatedRoute !== null;
   const currentPos = position || { lat: 28.0048, lon: -15.4158 };
 
-  // Calculate sorted nearby points of interest
-  const nearbyPoints = useMemo(() => {
+  // Calculate sorted active checkpoints with real-time distance
+  const activeCheckpoints = useMemo(() => {
     const list = [];
-    (comercios || []).forEach(c => {
-      if (c.lat && c.lon) {
+    
+    // Add points from replicated route if active
+    if (replicatedRoute) {
+      const repPoints = getSafePoints(replicatedRoute);
+      repPoints.forEach((p, idx) => {
         list.push({
-          id: `c-${c.id}`,
-          name: c.nombre,
-          emoji: c.emoji || '🏪',
-          distance: haversineDist(currentPos, { lat: c.lat, lon: c.lon }),
-          category: c.categoria
+          id: `rep-${idx}`,
+          name: p.name || `Punto ${idx + 1}`,
+          lat: p.lat,
+          lon: p.lon,
+          distance: haversineDist(currentPos, p),
+          isReplicated: true
         });
-      }
-    });
+      });
+    }
 
+    // Add live points added by user
     (points || []).forEach((p, idx) => {
       list.push({
-        id: `p-${idx}`,
-        name: p.name || `Punto de control ${idx + 1}`,
-        emoji: '📍',
+        id: `live-${idx}`,
+        name: p.name || `Punto ${idx + 1}`,
+        lat: p.lat,
+        lon: p.lon,
         distance: haversineDist(currentPos, p),
-        category: 'Punto de ruta'
+        isReplicated: false
       });
     });
 
     return list.sort((a, b) => a.distance - b.distance);
-  }, [comercios, points, currentPos]);
+  }, [replicatedRoute, points, currentPos]);
+
+  // Combined safe routes list
+  const allRoutesList = useMemo(() => {
+    const list = [...(savedRoutes || [])];
+    DEFAULT_POPULAR_ROUTES.forEach(pop => {
+      if (!list.some(r => r.id === pop.id)) {
+        list.push(pop);
+      }
+    });
+    return list;
+  }, [savedRoutes]);
 
   return (
     <div style={{ paddingBottom: '6rem', paddingTop: '0.5rem' }}>
@@ -559,13 +768,13 @@ const RutasPage = () => {
         </p>
       </div>
 
-      {/* Live Map (Always visible for orientation and points) */}
+      {/* Live Map (Focus purely on route & green points) */}
       <LiveMap
         position={currentPos}
         route={route}
         points={points}
-        comercios={comercios}
-        targetRoute={replicatedRoute ? replicatedRoute.path : null}
+        targetRoute={replicatedRoute ? getSafePath(replicatedRoute) : null}
+        targetPoints={replicatedRoute ? getSafePoints(replicatedRoute) : null}
         onRemovePoint={removePoint}
         tr={tr}
       />
@@ -592,34 +801,39 @@ const RutasPage = () => {
         </div>
       )}
 
-      {/* Points with Real-time Distances Chips */}
-      {nearbyPoints.length > 0 && (
-        <div style={{ margin: '0 1rem 0.75rem' }}>
-          <p style={{ fontSize: '0.8rem', color: 'var(--color-detail)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem' }}>
-            📍 Puntos y Comercios Cercanos ({nearbyPoints.length}):
-          </p>
-          <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.4rem' }}>
-            {nearbyPoints.slice(0, 6).map((pt) => (
+      {/* Checkpoints & Real-time Distance Panel */}
+      {activeCheckpoints.length > 0 && (
+        <div style={{ margin: '0 1rem 0.75rem', backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '0.85rem 1rem', boxShadow: 'var(--shadow-card)', border: '1.5px solid rgba(34, 197, 94, 0.25)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <p style={{ fontSize: '0.82rem', color: '#15803d', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              <span>📍</span> Puntos de control y distancia ({activeCheckpoints.length}):
+            </p>
+            <span style={{ fontSize: '0.75rem', color: '#22c55e', fontWeight: '700' }}>En tiempo real</span>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.3rem' }}>
+            {activeCheckpoints.map((pt, idx) => (
               <div
-                key={pt.id}
+                key={pt.id || idx}
                 style={{
-                  backgroundColor: 'var(--color-card)',
-                  border: '1.5px solid rgba(34, 197, 94, 0.25)',
+                  backgroundColor: 'var(--color-card-alt)',
+                  border: '1.5px solid #22c55e',
                   borderRadius: '1rem',
-                  padding: '0.5rem 0.8rem',
-                  boxShadow: 'var(--shadow-card)',
+                  padding: '0.5rem 0.85rem',
                   flexShrink: 0,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.5rem'
+                  gap: '0.5rem',
+                  boxShadow: '0 2px 8px rgba(34, 197, 94, 0.15)'
                 }}
               >
-                <span style={{ fontSize: '1.1rem' }}>{pt.emoji}</span>
+                <span style={{ backgroundColor: '#22c55e', color: 'white', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: '800' }}>
+                  {idx + 1}
+                </span>
                 <div>
-                  <p style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--color-text)', margin: 0, maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <p style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--color-text)', margin: 0, maxWidth: '140px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {pt.name}
                   </p>
-                  <p style={{ fontSize: '0.72rem', color: '#16a34a', fontWeight: '700', margin: 0 }}>
+                  <p style={{ fontSize: '0.78rem', color: '#16a34a', fontWeight: '800', margin: 0 }}>
                     a {formatDistance(pt.distance)}
                   </p>
                 </div>
@@ -634,7 +848,7 @@ const RutasPage = () => {
         {!isRouteActive ? (
           <button 
             onClick={handleStartRoute} 
-            style={{ backgroundColor: '#22c55e', color: 'white', padding: '0.95rem', borderRadius: '2.5rem', width: '100%', fontSize: '1rem', fontWeight: '700', border: 'none', cursor: 'pointer', boxShadow: '0 4px 14px rgba(34, 197, 94, 0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+            style={{ backgroundColor: '#22c55e', color: 'white', padding: '1rem', borderRadius: '2.5rem', width: '100%', fontSize: '1.05rem', fontWeight: '700', border: 'none', cursor: 'pointer', boxShadow: '0 4px 14px rgba(34, 197, 94, 0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
           >
             ▶ {tr?.iniciarRuta || 'Iniciar ruta'}
           </button>
@@ -680,7 +894,7 @@ const RutasPage = () => {
 
             <button 
               onClick={handleFinish} 
-              style={{ backgroundColor: 'var(--color-accent)', color: 'white', padding: '0.9rem', borderRadius: '2.5rem', width: '100%', fontWeight: '700', border: 'none', cursor: 'pointer', fontSize: '0.95rem', boxShadow: '0 4px 12px rgba(212, 96, 122, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+              style={{ backgroundColor: 'var(--color-accent)', color: 'white', padding: '0.95rem', borderRadius: '2.5rem', width: '100%', fontWeight: '700', border: 'none', cursor: 'pointer', fontSize: '1rem', boxShadow: '0 4px 12px rgba(212, 96, 122, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
             >
               🏁 {tr?.finalizarRuta || 'Finalizar y guardar'}
             </button>
@@ -696,83 +910,109 @@ const RutasPage = () => {
         
         {/* Render Saved + Popular Routes */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-          {[...savedRoutes, ...DEFAULT_POPULAR_ROUTES.filter(pr => !savedRoutes.some(sr => sr.id === pr.id))].map((rt) => (
-            <div 
-              key={rt.id} 
-              style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '1.2rem', boxShadow: 'var(--shadow-card)', cursor: 'pointer' }}
-              onClick={() => setExpandedRouteId(expandedRouteId === rt.id ? null : rt.id)}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
-                    <h4 style={{ color: 'var(--color-text)', fontSize: '1.1rem', fontFamily: 'var(--font-main)', margin: 0 }}>{rt.name}</h4>
-                    {String(rt.id).startsWith('pop-') && (
-                      <span style={{ fontSize: '0.68rem', backgroundColor: 'rgba(34, 197, 94, 0.15)', color: '#16a34a', padding: '0.15rem 0.5rem', borderRadius: '0.8rem', fontWeight: '700' }}>
-                        ⭐ Popular
-                      </span>
-                    )}
-                  </div>
-                  <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-                    {rt.distance.toFixed(2).replace('.', ',')} km • {Math.round(rt.distance * 1312).toLocaleString('es-ES')} {tr?.pasos || 'pasos'} • {formatTime(rt.duration)}
-                  </p>
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <div style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: '#16a34a', padding: '0.4rem 0.8rem', borderRadius: '1rem', fontSize: '0.85rem', fontWeight: '700' }}>
-                    +{rt.latidos_earned} ❤
-                  </div>
-                </div>
-              </div>
+          {allRoutesList.map((rt) => {
+            const rtPoints = getSafePoints(rt);
+            const rtPath = getSafePath(rt);
+            const isExpanded = expandedRouteId === rt.id;
+            const distanceNum = typeof rt.distance === 'number' ? rt.distance : parseFloat(rt.distance) || 0;
+            const stepsCount = Math.round(distanceNum * 1312);
 
-              {expandedRouteId === rt.id && (
-                <div style={{ marginTop: '1rem' }}>
-                  {/* Route points preview with distances */}
-                  {rt.points && rt.points.length > 0 && (
-                    <div style={{ marginBottom: '0.8rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                      {rt.points.map((p, idx) => (
-                        <span key={idx} style={{ fontSize: '0.75rem', backgroundColor: 'var(--color-card-alt)', padding: '0.25rem 0.6rem', borderRadius: '0.8rem', color: 'var(--color-text)' }}>
-                          📍 {p.name || `Punto ${idx+1}`} <strong style={{ color: '#16a34a' }}>(a {formatDistance(haversineDist(currentPos, p))})</strong>
+            return (
+              <div 
+                key={rt.id} 
+                style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '1.2rem', boxShadow: 'var(--shadow-card)', cursor: 'pointer' }}
+                onClick={() => setExpandedRouteId(isExpanded ? null : rt.id)}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+                      <h4 style={{ color: 'var(--color-text)', fontSize: '1.1rem', fontFamily: 'var(--font-main)', margin: 0 }}>{rt.name}</h4>
+                      {String(rt.id).startsWith('pop-') && (
+                        <span style={{ fontSize: '0.68rem', backgroundColor: 'rgba(34, 197, 94, 0.15)', color: '#16a34a', padding: '0.15rem 0.5rem', borderRadius: '0.8rem', fontWeight: '700' }}>
+                          ⭐ Popular
                         </span>
-                      ))}
+                      )}
                     </div>
-                  )}
-
-                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleReplicar(rt); }} 
-                      style={{ flex: '1 1 100%', padding: '0.65rem', borderRadius: '0.8rem', border: 'none', backgroundColor: '#22c55e', color: 'white', fontSize: '0.88rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
-                    >
-                      ▶ {tr?.repetirRuta || 'Comenzar esta ruta'}
-                    </button>
-                    {!String(rt.id).startsWith('pop-') && (
-                      <>
-                        <button onClick={(e) => { e.stopPropagation(); setEditingRoute(rt); }} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.8rem', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text)', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
-                          ✏️ {tr?.editar || 'Editar'}
-                        </button>
-                        <button onClick={(e) => handleDelete(e, rt.id)} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.8rem', border: 'none', backgroundColor: '#e74c3c', color: 'white', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
-                          🗑️ {tr?.eliminar || 'Eliminar'}
-                        </button>
-                      </>
-                    )}
+                    <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', margin: 0 }}>
+                      {distanceNum.toFixed(2).replace('.', ',')} km • {stepsCount.toLocaleString('es-ES')} {tr?.pasos || 'pasos'} • {formatTime(rt.duration)}
+                    </p>
                   </div>
-                  <RouteMap routePath={rt.path} routePoints={rt.points} tr={tr} />
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <div style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: '#16a34a', padding: '0.4rem 0.8rem', borderRadius: '1rem', fontSize: '0.85rem', fontWeight: '700' }}>
+                      +{rt.latidos_earned || 0} ❤
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+
+                {isExpanded && (
+                  <div style={{ marginTop: '1rem' }}>
+                    {/* Route points preview with distances */}
+                    {rtPoints.length > 0 && (
+                      <div style={{ marginBottom: '0.8rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        {rtPoints.map((p, idx) => (
+                          <span key={idx} style={{ fontSize: '0.75rem', backgroundColor: 'var(--color-card-alt)', border: '1px solid rgba(34,197,94,0.3)', padding: '0.3rem 0.6rem', borderRadius: '0.8rem', color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span>📍</span> {p.name || `Punto ${idx + 1}`} <strong style={{ color: '#16a34a' }}>(a {formatDistance(haversineDist(currentPos, p))})</strong>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleReplicar(rt); }} 
+                        style={{ flex: '1 1 100%', padding: '0.75rem', borderRadius: '0.8rem', border: 'none', backgroundColor: '#22c55e', color: 'white', fontSize: '0.9rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', boxShadow: '0 4px 10px rgba(34, 197, 94, 0.3)' }}
+                      >
+                        ▶ {tr?.repetirRuta || 'Comenzar esta ruta'}
+                      </button>
+                      {!String(rt.id).startsWith('pop-') && (
+                        <>
+                          <button onClick={(e) => { e.stopPropagation(); setEditingRoute(rt); }} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.8rem', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text)', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
+                            ✏️ {tr?.editar || 'Editar'}
+                          </button>
+                          <button onClick={(e) => handleDelete(e, rt.id)} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.8rem', border: 'none', backgroundColor: '#e74c3c', color: 'white', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
+                            🗑️ {tr?.eliminar || 'Eliminar'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <RouteMap routePath={rtPath} routePoints={rtPoints} currentPos={currentPos} tr={tr} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {showSaveModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ backgroundColor: 'var(--color-card)', padding: '1.5rem', borderRadius: '1.5rem', width: '100%', maxWidth: '400px' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ backgroundColor: 'var(--color-card)', padding: '1.5rem', borderRadius: '1.5rem', width: '100%', maxWidth: '400px', boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--color-text)', marginBottom: '0.5rem' }}>{tr?.guardarRuta || 'Guardar Ruta'}</h3>
             <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
               <span style={{ color: '#22c55e', fontWeight: 'bold' }}>{formatDistance(distanceM)}</span> • {routeSteps.toLocaleString('es-ES')} {tr?.pasos || 'pasos'} • +{earnedLatidos} ❤
             </p>
-            <input type="text" value={routeName} onChange={(e) => setRouteName(e.target.value)} placeholder={tr?.nombreRutaPlaceholder || 'Nombre de la ruta'} style={{ width: '100%', padding: '0.9rem', borderRadius: '1rem', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text)', marginBottom: '1.5rem', fontSize: '1rem', outline: 'none' }} />
+            <input 
+              type="text" 
+              value={routeName} 
+              onChange={(e) => setRouteName(e.target.value)} 
+              placeholder={tr?.nombreRutaPlaceholder || 'Nombre de la ruta'} 
+              style={{ width: '100%', padding: '0.9rem', borderRadius: '1rem', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text)', marginBottom: '1.5rem', fontSize: '1rem', outline: 'none' }} 
+            />
             <div style={{ display: 'flex', gap: '0.6rem' }}>
-              <button onClick={() => setShowSaveModal(false)} style={{ flex: 1, padding: '0.8rem', borderRadius: '2rem', border: 'none', backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text)', fontWeight: '600', cursor: 'pointer' }}>{tr?.cancelar || 'Cancelar'}</button>
-              <button onClick={handleSaveRoute} style={{ flex: 1, padding: '0.8rem', borderRadius: '2rem', border: 'none', backgroundColor: '#22c55e', color: 'white', fontWeight: '700', cursor: 'pointer' }}>{tr?.guardar || 'Guardar'}</button>
+              <button 
+                disabled={isSaving}
+                onClick={() => setShowSaveModal(false)} 
+                style={{ flex: 1, padding: '0.8rem', borderRadius: '2rem', border: 'none', backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text)', fontWeight: '600', cursor: isSaving ? 'not-allowed' : 'pointer' }}
+              >
+                {tr?.cancelar || 'Cancelar'}
+              </button>
+              <button 
+                disabled={isSaving}
+                onClick={handleSaveRoute} 
+                style={{ flex: 1, padding: '0.8rem', borderRadius: '2rem', border: 'none', backgroundColor: '#22c55e', color: 'white', fontWeight: '700', cursor: isSaving ? 'not-allowed' : 'pointer', opacity: isSaving ? 0.7 : 1 }}
+              >
+                {isSaving ? 'Guardando...' : (tr?.guardar || 'Guardar')}
+              </button>
             </div>
           </div>
         </div>
@@ -780,6 +1020,23 @@ const RutasPage = () => {
 
       {editingRoute && (
         <EditRouteModal route={editingRoute} onClose={() => setEditingRoute(null)} onSave={handleEditSave} tr={tr} />
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteConfirmId && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ backgroundColor: 'var(--color-card)', padding: '1.5rem', borderRadius: '1.5rem', width: '100%', maxWidth: '350px', textAlign: 'center' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🗑️</div>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', color: 'var(--color-text)', marginBottom: '0.5rem' }}>{tr?.eliminar || 'Eliminar'} {tr?.navRutas || 'Ruta'}</h3>
+            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+              ¿Estás seguro de que deseas eliminar esta ruta guardada?
+            </p>
+            <div style={{ display: 'flex', gap: '0.6rem' }}>
+              <button onClick={cancelDelete} style={{ flex: 1, padding: '0.8rem', borderRadius: '2rem', border: '1px solid var(--color-border)', backgroundColor: 'transparent', color: 'var(--color-text)', fontWeight: '600', cursor: 'pointer' }}>{tr?.cancelar || 'Cancelar'}</button>
+              <button onClick={confirmDelete} style={{ flex: 1, padding: '0.8rem', borderRadius: '2rem', border: 'none', backgroundColor: '#e74c3c', color: 'white', fontWeight: '600', cursor: 'pointer' }}>{tr?.eliminar || 'Eliminar'}</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Discard in-progress route modal */}
@@ -799,35 +1056,6 @@ const RutasPage = () => {
           </div>
         </div>
       )}
-
-      {/* Delete Saved Route Confirmation Modal */}
-      {deleteConfirmId && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ backgroundColor: 'var(--color-card)', padding: '1.5rem', borderRadius: '1.5rem', width: '100%', maxWidth: '350px', textAlign: 'center' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🗑️</div>
-            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: 'var(--color-text)', marginBottom: '0.5rem' }}>{tr?.eliminar || 'Eliminar'}</h3>
-            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-              {tr?.confirmarEliminarRuta || '¿Estás seguro de que deseas eliminar esta ruta de forma permanente?'}
-            </p>
-            
-            <div style={{ display: 'flex', gap: '0.6rem' }}>
-              <button onClick={cancelDelete} style={{ flex: 1, padding: '0.8rem', borderRadius: '2rem', border: '1px solid var(--color-border)', backgroundColor: 'transparent', color: 'var(--color-text)', fontWeight: '600', cursor: 'pointer' }}>{tr?.cancelar || 'Cancelar'}</button>
-              <button onClick={confirmDelete} style={{ flex: 1, padding: '0.8rem', borderRadius: '2rem', border: 'none', backgroundColor: '#e74c3c', color: 'white', fontWeight: '600', cursor: 'pointer' }}>{tr?.eliminar || 'Eliminar'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <style>{`
-        @keyframes pulseRing {
-          0% { transform: scale(0.6); opacity: 0.9; }
-          100% { transform: scale(1.7); opacity: 0; }
-        }
-        @keyframes pulseGreenDot {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.3; transform: scale(0.8); }
-        }
-      `}</style>
     </div>
   );
 };

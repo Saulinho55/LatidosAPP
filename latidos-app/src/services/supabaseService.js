@@ -351,8 +351,25 @@ export const supabaseService = {
     };
 
     const { data, error } = await supabase.from('routes').insert([payload]).select().single();
-    if (error) throw error;
-    return data;
+    if (error) {
+      if (error.code === '23505') {
+        payload.id = await getNextId('routes');
+        const retry = await supabase.from('routes').insert([payload]).select().single();
+        if (retry.error) throw retry.error;
+        return {
+          ...retry.data,
+          path: typeof retry.data.path === 'string' ? JSON.parse(retry.data.path || '[]') : (retry.data.path || []),
+          points: typeof retry.data.points === 'string' ? JSON.parse(retry.data.points || '[]') : (retry.data.points || [])
+        };
+      }
+      throw error;
+    }
+
+    return {
+      ...data,
+      path: typeof data.path === 'string' ? JSON.parse(data.path || '[]') : (data.path || []),
+      points: typeof data.points === 'string' ? JSON.parse(data.points || '[]') : (data.points || [])
+    };
   },
 
   async updateRoute(id, updatedData) {
@@ -370,7 +387,11 @@ export const supabaseService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return {
+      ...data,
+      path: typeof data.path === 'string' ? JSON.parse(data.path || '[]') : (data.path || []),
+      points: typeof data.points === 'string' ? JSON.parse(data.points || '[]') : (data.points || [])
+    };
   },
 
   async deleteRoute(id) {
