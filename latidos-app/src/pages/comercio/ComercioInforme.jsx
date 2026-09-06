@@ -22,16 +22,18 @@ const ComercioInforme = () => {
         const currentMonthStr = now.toISOString().slice(0, 7); // YYYY-MM
         
         // Filter transactions for current month
-        const monthTxs = data.transactions.filter(t => t.fecha.startsWith(currentMonthStr));
+        const monthTxs = data.transactions.filter(t => t.fecha && t.fecha.startsWith(currentMonthStr));
         
-        const gastoMes = monthTxs.reduce((sum, t) => sum + (t.importe_compra || 0), 0);
+        const gastoMes = monthTxs.reduce((sum, t) => sum + (parseFloat(t.importe_compra) || 0), 0);
         const ticketMedio = monthTxs.length > 0 ? (gastoMes / monthTxs.length) : 0;
         
         // Calculate recurrency (all time)
         const userTxsMap = {};
         data.transactions.forEach(t => {
-          if (!userTxsMap[t.user_id]) userTxsMap[t.user_id] = 0;
-          userTxsMap[t.user_id]++;
+          if (t.user_id) {
+            if (!userTxsMap[t.user_id]) userTxsMap[t.user_id] = 0;
+            userTxsMap[t.user_id]++;
+          }
         });
         const totalUsers = Object.keys(userTxsMap).length;
         const recurrentUsers = Object.values(userTxsMap).filter(count => count >= 2).length;
@@ -41,8 +43,10 @@ const ComercioInforme = () => {
         const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
         const dayCounts = [0,0,0,0,0,0,0];
         data.transactions.forEach(t => {
-          const d = new Date(t.fecha).getDay();
-          dayCounts[d]++;
+          if (t.fecha) {
+            const d = new Date(t.fecha).getDay();
+            dayCounts[d]++;
+          }
         });
         const maxDayCount = Math.max(...dayCounts);
         const bestDayIndex = dayCounts.indexOf(maxDayCount);
@@ -54,7 +58,7 @@ const ComercioInforme = () => {
         const chartData = meses.map((monthStr, index) => {
           const monthNumber = String(index + 1).padStart(2, '0');
           const monthPrefix = `${currentYear}-${monthNumber}`;
-          const count = data.transactions.filter(t => t.fecha.startsWith(monthPrefix)).length;
+          const count = data.transactions.filter(t => t.fecha && t.fecha.startsWith(monthPrefix)).length;
           return { month: monthStr, clients: count };
         });
 

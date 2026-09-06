@@ -15,7 +15,7 @@ const ComercioLayout = () => {
     );
   }
 
-  if (user?.role !== 'comercio') {
+  if (user?.role !== 'comercio' && user?.role !== 'admin' && user?.role !== 'superadmin') {
     return (
       <div style={{ padding: '2rem', textAlign: 'center', fontFamily: 'var(--font-main)' }}>
         <p>No tienes permiso para ver esta página.</p>

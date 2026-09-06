@@ -14,15 +14,29 @@ const ComercioBonos = () => {
   }, [user]);
 
   const loadBonos = async () => {
-    if (!user?.comercio_id) return;
-    // We fetch all comercios and find ours to get the bonos
-    // Alternatively we could have a specific endpoint, but this is fine for now
-    const all = await fetchComercios();
-    const mine = all.find(c => c.id === user.comercio_id);
-    if (mine && mine.bonos) {
-      setBonos(mine.bonos);
+    try {
+      const all = await fetchComercios();
+      let mine = null;
+      if (user?.comercio_id) {
+        mine = all.find(c => Number(c.id) === Number(user.comercio_id));
+      }
+      if (!mine && user) {
+        mine = all.find(c =>
+          (c.email && user.email && c.email.toLowerCase() === user.email.toLowerCase()) ||
+          (c.nombre && user.name && c.nombre.toLowerCase() === user.name.toLowerCase())
+        );
+      }
+      if (!mine && all.length > 0) {
+        mine = all[0];
+      }
+      if (mine && mine.bonos) {
+        setBonos(Array.isArray(mine.bonos) ? mine.bonos : (typeof mine.bonos === 'string' ? JSON.parse(mine.bonos || '[]') : []));
+      }
+    } catch (e) {
+      console.error('Error loading bonos:', e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleAdd = async (e) => {
