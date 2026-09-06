@@ -2,8 +2,21 @@ import { supabase } from '../lib/supabase';
 
 /**
  * Service to handle direct Supabase CRUD operations.
- * Returns null / throws error when offline or request fails so the app can fallback to local SQLite/IDB.
+ * Handles auto-increment ID generation and falls back gracefully.
  */
+
+async function getNextId(table) {
+  const { data } = await supabase
+    .from(table)
+    .select('id')
+    .order('id', { ascending: false })
+    .limit(1);
+
+  if (data && data.length > 0 && typeof data[0].id === 'number') {
+    return data[0].id + 1;
+  }
+  return 1;
+}
 
 export const supabaseService = {
   // ── Auth & Users ──
@@ -20,13 +33,28 @@ export const supabaseService = {
   },
 
   async registerUser(userData) {
+    let payload = { ...userData };
+    if (!payload.id) {
+      payload.id = await getNextId('users');
+    }
+
     const { data, error } = await supabase
       .from('users')
-      .insert([userData])
+      .insert([payload])
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // If collision, recalculate next ID and retry
+      if (error.code === '23505') {
+        const nextId = await getNextId('users');
+        payload.id = nextId;
+        const retry = await supabase.from('users').insert([payload]).select().single();
+        if (retry.error) throw retry.error;
+        return retry.data;
+      }
+      throw error;
+    }
     return data;
   },
 
@@ -118,7 +146,9 @@ export const supabaseService = {
   },
 
   async createComercio(comercioData) {
+    const nextId = await getNextId('comercios');
     const payload = {
+      id: comercioData.id || nextId,
       nombre: comercioData.nombre,
       categoria: comercioData.categoria,
       direccion: comercioData.direccion,
@@ -191,13 +221,26 @@ export const supabaseService = {
   },
 
   async addTransaction(tx) {
+    let payload = { ...tx };
+    if (!payload.id) {
+      payload.id = await getNextId('transactions');
+    }
+
     const { data, error } = await supabase
       .from('transactions')
-      .insert([tx])
+      .insert([payload])
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === '23505') {
+        payload.id = await getNextId('transactions');
+        const retry = await supabase.from('transactions').insert([payload]).select().single();
+        if (retry.error) throw retry.error;
+        return retry.data;
+      }
+      throw error;
+    }
     return data;
   },
 
@@ -230,7 +273,9 @@ export const supabaseService = {
   },
 
   async addRoute(routeData) {
+    const nextId = await getNextId('routes');
     const payload = {
+      id: routeData.id || nextId,
       user_id: routeData.user_id,
       name: routeData.name,
       distance: routeData.distance,
@@ -283,9 +328,10 @@ export const supabaseService = {
       if (error) throw error;
       return data;
     } else {
+      const nextId = await getNextId('activity');
       const { data, error } = await supabase
         .from('activity')
-        .insert([{ user_id: userId, fecha, pasos, latidos_ganados: latidosGanados || 0 }])
+        .insert([{ id: nextId, user_id: userId, fecha, pasos, latidos_ganados: latidosGanados || 0 }])
         .select()
         .single();
       if (error) throw error;
