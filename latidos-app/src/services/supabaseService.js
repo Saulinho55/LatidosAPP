@@ -269,11 +269,22 @@ export const supabaseService = {
     const { data, error } = await supabase
       .from('transactions')
       .select('*')
-      .eq('comercio_nombre', comercioNombre)
       .order('id', { ascending: false });
 
-    if (error) throw error;
-    return data || [];
+    if (error) {
+      console.error('Error fetching transactions by comercio:', error);
+      return [];
+    }
+    if (!data) return [];
+    if (!comercioNombre) return data;
+
+    const normalize = (str) => (str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const target = normalize(comercioNombre);
+
+    return data.filter(t => {
+      const txName = normalize(t.comercio_nombre);
+      return txName === target || txName.includes(target) || target.includes(txName);
+    });
   },
 
   async addTransaction(tx) {

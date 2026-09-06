@@ -1,13 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useLatidos } from '../../context/LatidosContext';
 
 const ComercioValidar = () => {
   const { validarBono, user } = useLatidos();
+  const [searchParams] = useSearchParams();
   
   const [codigo, setCodigo] = useState('');
   const [importe, setImporte] = useState('');
   const [status, setStatus] = useState(null);
   const [isValidating, setIsValidating] = useState(false);
+
+  useEffect(() => {
+    const codeParam = searchParams.get('code');
+    if (codeParam) {
+      setCodigo(codeParam.trim().toUpperCase());
+    }
+  }, [searchParams]);
 
   const handleValidar = async (e) => {
     e.preventDefault();

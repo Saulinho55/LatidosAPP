@@ -621,17 +621,31 @@ export const LatidosProvider = ({ children }) => {
   };
 
   const fetchComercioStats = async () => {
-    if (!user?.comercio_id) return { transactions: [] };
     try {
       const cList = await supabaseService.getComercios();
-      const myComercio = cList.find(c => c.id === user.comercio_id);
+      let myComercio = null;
+
+      if (user?.comercio_id) {
+        myComercio = cList.find(c => Number(c.id) === Number(user.comercio_id));
+      }
+      if (!myComercio && user) {
+        myComercio = cList.find(c =>
+          (c.email && user.email && c.email.toLowerCase() === user.email.toLowerCase()) ||
+          (c.nombre && user.name && c.nombre.toLowerCase() === user.name.toLowerCase())
+        );
+      }
+      if (!myComercio && cList.length > 0) {
+        myComercio = cList[0];
+      }
+
       if (myComercio) {
         const txs = await supabaseService.getTransactionsByComercio(myComercio.nombre);
-        return { transactions: txs };
+        return { transactions: txs, comercio: myComercio };
       }
-      return { transactions: [] };
+      return { transactions: [], comercio: null };
     } catch (e) {
-      return { transactions: [] };
+      console.error('Error in fetchComercioStats:', e);
+      return { transactions: [], comercio: null };
     }
   };
 
