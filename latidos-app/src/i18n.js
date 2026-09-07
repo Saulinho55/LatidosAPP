@@ -36,6 +36,8 @@ export const t = {
 
     // Rutas
     misRutas: 'Mis Rutas',
+    rutasRecomendadas: 'Rutas Recomendadas',
+    sinRutasRecomendadas: 'Aún no hay rutas recomendadas disponibles.',
     registrarRuta: 'Grabar Ruta',
     distancia: 'Distancia',
     tiempo: 'Tiempo',
@@ -166,6 +168,8 @@ export const t = {
 
     // Rutas
     misRutas: 'My Routes',
+    rutasRecomendadas: 'Recommended Routes',
+    sinRutasRecomendadas: 'No recommended routes available yet.',
     registrarRuta: 'Record Route',
     distancia: 'Distance',
     tiempo: 'Time',

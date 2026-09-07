@@ -126,10 +126,84 @@ const Perfil = () => {
 
   if (!isAuthenticated) {
     return (
-      <div style={{ padding: '4rem 1.5rem', textAlign: 'center' }}>
-        <h2 style={{ fontFamily: 'var(--font-display)', marginBottom: '1rem', color: 'var(--color-text)' }}>{tr?.cuenta || 'Debes iniciar sesión'}</h2>
-        <p style={{ fontFamily: 'var(--font-main)', color: 'var(--color-text-muted)', marginBottom: '2rem' }}>Inicia sesión para ver tu perfil, preferencias e historial.</p>
-        <button onClick={() => navigate('/login')} style={{ backgroundColor: 'var(--color-accent)', color: 'white', padding: '0.8rem 1.5rem', borderRadius: '2rem', fontFamily: 'var(--font-main)', fontWeight: '600', border: 'none', cursor: 'pointer' }}>Ir a Iniciar Sesión</button>
+      <div style={{
+        padding: '3rem 1.5rem 6rem 1.5rem',
+        minHeight: '80vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center'
+      }}>
+        <div style={{
+          backgroundColor: 'var(--color-card)',
+          borderRadius: '1.8rem',
+          padding: '2.5rem 1.8rem',
+          maxWidth: '380px',
+          width: '100%',
+          boxShadow: 'var(--shadow-card)',
+          border: '1px solid var(--color-border)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '1.4rem',
+            backgroundColor: 'var(--color-card-alt)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '1.2rem',
+            border: '1px solid var(--color-border)'
+          }}>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+
+          <h2 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '1.5rem',
+            fontWeight: '700',
+            color: 'var(--color-text)',
+            margin: '0 0 0.5rem 0'
+          }}>
+            Mi Perfil
+          </h2>
+
+          <p style={{
+            fontFamily: 'var(--font-main)',
+            fontSize: '0.9rem',
+            color: 'var(--color-text-muted)',
+            lineHeight: '1.5',
+            margin: '0 0 1.8rem 0'
+          }}>
+            Inicia sesión o crea una cuenta para personalizar tus preferencias, ver tus estadísticas de actividad y gestionar tu perfil de usuario.
+          </p>
+
+          <button
+            onClick={() => navigate('/login')}
+            style={{
+              backgroundColor: 'var(--color-accent)',
+              color: 'white',
+              padding: '0.95rem 1.8rem',
+              borderRadius: '2rem',
+              fontFamily: 'var(--font-main)',
+              fontWeight: '700',
+              fontSize: '0.95rem',
+              border: 'none',
+              cursor: 'pointer',
+              width: '100%',
+              boxShadow: 'var(--shadow-card)',
+              transition: 'transform 0.15s ease'
+            }}
+          >
+            Iniciar sesión
+          </button>
+        </div>
       </div>
     );
   }

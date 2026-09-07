@@ -29,7 +29,8 @@ const AdminLayout = () => {
   const tabs = [
     { path: '/admin', label: '📊 Dashboard' },
     { path: '/admin/users', label: '👥 Usuarios' },
-    { path: '/admin/comercios', label: '🏪 Comercios' }
+    { path: '/admin/comercios', label: '🏪 Comercios' },
+    { path: '/admin/rutas', label: '🧭 Rutas' }
   ];
 
   return (

@@ -12,6 +12,7 @@ export const LatidosProvider = ({ children }) => {
   const [weeklySteps, setWeeklySteps] = useState([0,0,0,0,0,0,0]);
   const [transactions, setTransactions] = useState([]);
   const [savedRoutes, setSavedRoutes] = useState([]);
+  const [recommendedRoutes, setRecommendedRoutes] = useState([]);
   const [activity, setActivity] = useState([]);
 
   // Preferences
@@ -24,8 +25,20 @@ export const LatidosProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const loadRecommendedRoutes = async () => {
+    try {
+      const rec = await supabaseService.getRecommendedRoutes();
+      if (rec && Array.isArray(rec)) {
+        setRecommendedRoutes(rec);
+      }
+    } catch (e) {
+      console.error('Error loading recommended routes:', e);
+    }
+  };
+
   // Check saved session on start
   useEffect(() => {
+    loadRecommendedRoutes();
     const savedUserId = localStorage.getItem('latidos_user_id');
     if (savedUserId) {
       const uid = parseInt(savedUserId, 10);
@@ -591,6 +604,60 @@ export const LatidosProvider = ({ children }) => {
     }
   };
 
+  // ── Recommended Routes CRUD ──
+  const fetchRecommendedRoutes = async () => {
+    try {
+      const rec = await supabaseService.getRecommendedRoutes();
+      if (rec && Array.isArray(rec)) {
+        setRecommendedRoutes(rec);
+        return rec;
+      }
+      return [];
+    } catch (e) {
+      console.error('Error in fetchRecommendedRoutes:', e);
+      return [];
+    }
+  };
+
+  const addRecommendedRoute = async (routeData) => {
+    try {
+      const created = await supabaseService.addRecommendedRoute(routeData);
+      if (created) {
+        setRecommendedRoutes(prev => [created, ...prev.filter(r => String(r.id) !== String(created.id))]);
+        return { success: true, data: created };
+      }
+      return { success: false, error: 'No se pudo crear la ruta recomendada' };
+    } catch (e) {
+      console.error('Error in addRecommendedRoute:', e);
+      return { success: false, error: e.message || 'Error al guardar la ruta recomendada' };
+    }
+  };
+
+  const updateRecommendedRoute = async (id, updatedData) => {
+    try {
+      const updated = await supabaseService.updateRecommendedRoute(id, updatedData);
+      if (updated) {
+        setRecommendedRoutes(prev => prev.map(r => String(r.id) === String(id) ? { ...r, ...updated } : r));
+        return { success: true, data: updated };
+      }
+      return { success: false, error: 'No se pudo actualizar la ruta recomendada' };
+    } catch (e) {
+      console.error('Error in updateRecommendedRoute:', e);
+      return { success: false, error: e.message || 'Error al actualizar la ruta recomendada' };
+    }
+  };
+
+  const deleteRecommendedRoute = async (id) => {
+    try {
+      await supabaseService.deleteRecommendedRoute(id);
+      setRecommendedRoutes(prev => prev.filter(r => String(r.id) !== String(id)));
+      return { success: true };
+    } catch (e) {
+      console.error('Error in deleteRecommendedRoute:', e);
+      return { success: false, error: e.message || 'Error al eliminar la ruta recomendada' };
+    }
+  };
+
   // ── Comercio Extra ──
   const validarBono = async (codigo, importe) => {
     let comId = user?.comercio_id;
@@ -716,13 +783,15 @@ export const LatidosProvider = ({ children }) => {
 
   return (
     <LatidosContext.Provider value={{
-      latidos, steps, racha, dailyGoal, weeklySteps, transactions, savedRoutes, activity,
+      latidos, steps, racha, dailyGoal, weeklySteps, transactions, savedRoutes, recommendedRoutes, activity,
       isAuthenticated, user, loading, theme, language, currency, tr,
       activeCode, activeCodeNotification, setActiveCodeNotification,
       generarCodigoCanje, cancelarCodigoCanje,
       ganarLatidos, canjearLatidos, updateSteps, updateDailyGoal, registrarCanje,
       savePreferences, toggleTheme, setLanguage: changeLanguage, setCurrency: changeCurrency,
-      saveRoute, deleteRoute, updateRoute, login, logout, loginUser, registerUser,
+      saveRoute, deleteRoute, updateRoute,
+      fetchRecommendedRoutes, addRecommendedRoute, updateRecommendedRoute, deleteRecommendedRoute,
+      login, logout, loginUser, registerUser,
       fetchAdminStats, fetchAdminUsers, createUser, fetchComercios, createComercio, updateComercio,
       deleteComercio, updateUser, deleteUser, validarBono, fetchComercioStats, updateComercioBonos,
       updateComercioHorarios, updateComercioProductos,

@@ -22,6 +22,49 @@ async function getNextId(table) {
   }
 }
 
+export const DEFAULT_POPULAR_ROUTES = [
+  {
+    id: 'pop-1',
+    user_id: 0,
+    name: 'Ruta Histórica San Gregorio',
+    distance: 1.85,
+    duration: 1320,
+    latidos_earned: 24,
+    points: [
+      { lat: 28.0048, lon: -15.4158, name: 'Plaza de San Gregorio' },
+      { lat: 28.0034, lon: -15.4144, name: 'Calle León y Castillo' },
+      { lat: 28.0021, lon: -15.4139, name: 'Calle Inés Chemida' }
+    ],
+    path: [
+      { lat: 28.0048, lon: -15.4158 },
+      { lat: 28.0042, lon: -15.4152 },
+      { lat: 28.0034, lon: -15.4144 },
+      { lat: 28.0028, lon: -15.4140 },
+      { lat: 28.0021, lon: -15.4139 }
+    ]
+  },
+  {
+    id: 'pop-2',
+    user_id: 0,
+    name: 'Paseo Parque de San Juan',
+    distance: 2.40,
+    duration: 1800,
+    latidos_earned: 31,
+    points: [
+      { lat: 28.0055, lon: -15.4162, name: 'Plaza de San Juan' },
+      { lat: 28.0038, lon: -15.4148, name: 'Paseo de la Fraternidad' },
+      { lat: 28.0015, lon: -15.4130, name: 'Mirador del Valle' }
+    ],
+    path: [
+      { lat: 28.0055, lon: -15.4162 },
+      { lat: 28.0048, lon: -15.4158 },
+      { lat: 28.0038, lon: -15.4148 },
+      { lat: 28.0025, lon: -15.4138 },
+      { lat: 28.0015, lon: -15.4130 }
+    ]
+  }
+];
+
 export const supabaseService = {
   // ── Auth & Users ──
   async login(email, password) {
@@ -448,6 +491,149 @@ export const supabaseService = {
       path: typeof r.path === 'string' ? JSON.parse(r.path || '[]') : (r.path || []),
       points: typeof r.points === 'string' ? JSON.parse(r.points || '[]') : (r.points || [])
     }));
+  },
+
+  async getRecommendedRoutes() {
+    try {
+      const { data, error } = await supabase
+        .from('routes')
+        .select('*')
+        .or('user_id.eq.0,user_id.is.null')
+        .order('id', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const parsed = data.map(r => ({
+          ...r,
+          path: typeof r.path === 'string' ? JSON.parse(r.path || '[]') : (r.path || []),
+          points: typeof r.points === 'string' ? JSON.parse(r.points || '[]') : (r.points || [])
+        }));
+        try {
+          localStorage.setItem('latidos_recommended_routes', JSON.stringify(parsed));
+        } catch (e) {}
+        return parsed;
+      }
+    } catch (err) {
+      console.warn('Could not fetch recommended routes from Supabase, checking fallback:', err);
+    }
+
+    try {
+      const cached = localStorage.getItem('latidos_recommended_routes');
+      if (cached) {
+        const parsedCached = JSON.parse(cached);
+        if (Array.isArray(parsedCached) && parsedCached.length > 0) {
+          return parsedCached;
+        }
+      }
+    } catch (e) {}
+
+    return DEFAULT_POPULAR_ROUTES;
+  },
+
+  async addRecommendedRoute(routeData) {
+    const nextId = await getNextId('routes');
+    const payload = {
+      id: routeData.id || nextId,
+      user_id: 0,
+      name: routeData.name,
+      distance: parseFloat(routeData.distance) || 0,
+      duration: parseInt(routeData.duration, 10) || 0,
+      latidos_earned: parseInt(routeData.latidos_earned, 10) || 0,
+      path: typeof routeData.path === 'string' ? routeData.path : JSON.stringify(routeData.path || []),
+      points: typeof routeData.points === 'string' ? routeData.points : JSON.stringify(routeData.points || [])
+    };
+
+    let result = null;
+    try {
+      const { data, error } = await supabase.from('routes').insert([payload]).select().single();
+      if (error) {
+        if (error.code === '23505') {
+          payload.id = await getNextId('routes');
+          const retry = await supabase.from('routes').insert([payload]).select().single();
+          if (retry.error) throw retry.error;
+          result = retry.data;
+        } else {
+          throw error;
+        }
+      } else {
+        result = data;
+      }
+    } catch (err) {
+      console.warn('Supabase addRecommendedRoute fallback:', err);
+      result = { ...payload, id: payload.id || Date.now() };
+    }
+
+    const formatted = {
+      ...result,
+      path: typeof result.path === 'string' ? JSON.parse(result.path || '[]') : (result.path || []),
+      points: typeof result.points === 'string' ? JSON.parse(result.points || '[]') : (result.points || [])
+    };
+
+    try {
+      const current = JSON.parse(localStorage.getItem('latidos_recommended_routes') || '[]');
+      const updated = [formatted, ...current.filter(r => String(r.id) !== String(formatted.id))];
+      localStorage.setItem('latidos_recommended_routes', JSON.stringify(updated));
+    } catch (e) {}
+
+    return formatted;
+  },
+
+  async updateRecommendedRoute(id, updatedData) {
+    const payload = {};
+    if (updatedData.name !== undefined) payload.name = updatedData.name;
+    if (updatedData.distance !== undefined) payload.distance = parseFloat(updatedData.distance);
+    if (updatedData.duration !== undefined) payload.duration = parseInt(updatedData.duration, 10);
+    if (updatedData.latidos_earned !== undefined) payload.latidos_earned = parseInt(updatedData.latidos_earned, 10);
+    if (updatedData.path !== undefined) {
+      payload.path = typeof updatedData.path === 'string' ? updatedData.path : JSON.stringify(updatedData.path || []);
+    }
+    if (updatedData.points !== undefined) {
+      payload.points = typeof updatedData.points === 'string' ? updatedData.points : JSON.stringify(updatedData.points || []);
+    }
+
+    let result = null;
+    try {
+      const { data, error } = await supabase
+        .from('routes')
+        .update(payload)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      result = data;
+    } catch (err) {
+      console.warn('Supabase updateRecommendedRoute fallback:', err);
+      result = { id, ...payload };
+    }
+
+    const formatted = {
+      ...result,
+      path: typeof result.path === 'string' ? JSON.parse(result.path || '[]') : (result.path || []),
+      points: typeof result.points === 'string' ? JSON.parse(result.points || '[]') : (result.points || [])
+    };
+
+    try {
+      const current = JSON.parse(localStorage.getItem('latidos_recommended_routes') || '[]');
+      const updated = current.map(r => String(r.id) === String(id) ? { ...r, ...formatted } : r);
+      localStorage.setItem('latidos_recommended_routes', JSON.stringify(updated));
+    } catch (e) {}
+
+    return formatted;
+  },
+
+  async deleteRecommendedRoute(id) {
+    try {
+      await supabase.from('routes').delete().eq('id', id);
+    } catch (err) {
+      console.warn('Supabase deleteRecommendedRoute error:', err);
+    }
+
+    try {
+      const current = JSON.parse(localStorage.getItem('latidos_recommended_routes') || '[]');
+      const updated = current.filter(r => String(r.id) !== String(id));
+      localStorage.setItem('latidos_recommended_routes', JSON.stringify(updated));
+    } catch (e) {}
+
+    return true;
   },
 
   async addRoute(routeData) {

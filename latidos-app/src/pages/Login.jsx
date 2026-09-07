@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLatidos } from '../context/LatidosContext';
 import GoogleReCaptcha from '../components/GoogleReCaptcha';
+import latidosIcon from '../assets/latidos_icon.png';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -95,19 +96,29 @@ const Login = () => {
       alignItems: 'center',
       minHeight: '100vh',
     }}>
-      {/* Logo */}
+      {/* Logo Container */}
       <div style={{
-        width: '64px', height: '64px',
+        width: '64px',
+        height: '64px',
         backgroundColor: 'var(--color-header-bg)',
-        borderRadius: '1.4rem',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        borderRadius: '1.35rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         marginBottom: '1rem',
         marginTop: '1.5rem',
-        boxShadow: 'var(--shadow-card)'
+        boxShadow: 'var(--shadow-card)',
+        padding: '0.35rem'
       }}>
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-header-text)" strokeWidth="1.8">
-          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-        </svg>
+        <img 
+          src={latidosIcon} 
+          alt="LATIDOS" 
+          style={{
+            width: '46px',
+            height: '52px',
+            objectFit: 'contain'
+          }}
+        />
       </div>
 
       <h1 style={{

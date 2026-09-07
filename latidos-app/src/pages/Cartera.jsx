@@ -230,10 +230,85 @@ const Cartera = () => {
 
   if (!isAuthenticated) {
     return (
-      <div style={{ padding: '4rem 1.5rem', textAlign: 'center' }}>
-        <h2 style={{ fontFamily: 'var(--font-display)', marginBottom: '1rem', color: 'var(--color-text)' }}>{tr?.cuenta || 'Debes iniciar sesión'}</h2>
-        <p style={{ fontFamily: 'var(--font-main)', color: 'var(--color-text-muted)', marginBottom: '2rem' }}>Inicia sesión para gestionar tu cartera de bonos.</p>
-        <button onClick={() => navigate('/login')} style={{ backgroundColor: 'var(--color-accent)', color: 'white', padding: '0.8rem 1.5rem', borderRadius: '2rem', fontFamily: 'var(--font-main)', fontWeight: '600', border: 'none', cursor: 'pointer' }}>Ir a Iniciar Sesión</button>
+      <div style={{
+        padding: '3rem 1.5rem 6rem 1.5rem',
+        minHeight: '80vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center'
+      }}>
+        <div style={{
+          backgroundColor: 'var(--color-card)',
+          borderRadius: '1.8rem',
+          padding: '2.5rem 1.8rem',
+          maxWidth: '380px',
+          width: '100%',
+          boxShadow: 'var(--shadow-card)',
+          border: '1px solid var(--color-border)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '1.4rem',
+            backgroundColor: 'var(--color-card-alt)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '1.2rem',
+            border: '1px solid var(--color-border)'
+          }}>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="7" width="20" height="14" rx="3"/>
+              <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+              <circle cx="12" cy="14" r="2"/>
+            </svg>
+          </div>
+
+          <h2 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '1.5rem',
+            fontWeight: '700',
+            color: 'var(--color-text)',
+            margin: '0 0 0.5rem 0'
+          }}>
+            Cartera de Latidos
+          </h2>
+
+          <p style={{
+            fontFamily: 'var(--font-main)',
+            fontSize: '0.9rem',
+            color: 'var(--color-text-muted)',
+            lineHeight: '1.5',
+            margin: '0 0 1.8rem 0'
+          }}>
+            Inicia sesión o crea una cuenta para ver tus Latidos acumulados, consultar tus cupones activos y canjearlos en tus comercios favoritos.
+          </p>
+
+          <button
+            onClick={() => navigate('/login')}
+            style={{
+              backgroundColor: 'var(--color-accent)',
+              color: 'white',
+              padding: '0.95rem 1.8rem',
+              borderRadius: '2rem',
+              fontFamily: 'var(--font-main)',
+              fontWeight: '700',
+              fontSize: '0.95rem',
+              border: 'none',
+              cursor: 'pointer',
+              width: '100%',
+              boxShadow: 'var(--shadow-card)',
+              transition: 'transform 0.15s ease'
+            }}
+          >
+            Iniciar sesión
+          </button>
+        </div>
       </div>
     );
   }

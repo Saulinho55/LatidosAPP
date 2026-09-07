@@ -13,6 +13,7 @@ import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminComercios from './pages/admin/AdminComercios';
+import AdminRutas from './pages/admin/AdminRutas';
 
 import ComercioLayout from './pages/comercio/ComercioLayout';
 import ComercioHoy from './pages/comercio/ComercioHoy';
@@ -94,6 +95,7 @@ function App() {
               <Route index element={<AdminDashboard />} />
               <Route path="users" element={<AdminUsers />} />
               <Route path="comercios" element={<AdminComercios />} />
+              <Route path="rutas" element={<AdminRutas />} />
             </Route>
 
             <Route path="/comercio" element={<ComercioLayout />}>

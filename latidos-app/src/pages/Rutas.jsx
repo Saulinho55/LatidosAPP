@@ -505,7 +505,7 @@ const EditRouteModal = ({ route, onClose, onSave, tr }) => {
 };
 
 const RutasPage = () => {
-  const { isAuthenticated, savedRoutes, saveRoute, deleteRoute, updateRoute, ganarLatidos, updateSteps, steps: totalSteps, tr } = useLatidos();
+  const { isAuthenticated, savedRoutes, recommendedRoutes, saveRoute, deleteRoute, updateRoute, ganarLatidos, updateSteps, steps: totalSteps, tr } = useLatidos();
   const navigate = useNavigate();
 
   const {
@@ -523,6 +523,7 @@ const RutasPage = () => {
     resetRoute
   } = useGeolocation();
 
+  const [activeTab, setActiveTab] = useState('recommended'); // 'recommended' | 'my_routes'
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef(null);
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -640,9 +641,85 @@ const RutasPage = () => {
 
   if (!isAuthenticated) {
     return (
-      <div style={{ padding: '4rem 1.5rem', textAlign: 'center' }}>
-        <h2 style={{ fontFamily: 'var(--font-display)', marginBottom: '1rem', color: 'var(--color-text)' }}>{tr?.cuenta || 'Debes iniciar sesión'}</h2>
-        <button onClick={() => navigate('/login')} style={{ backgroundColor: '#22c55e', color: 'white', padding: '0.8rem 1.5rem', borderRadius: '2rem', fontFamily: 'var(--font-main)', fontWeight: '600', border: 'none', cursor: 'pointer' }}>Ir a Iniciar Sesión</button>
+      <div style={{
+        padding: '3rem 1.5rem 6rem 1.5rem',
+        minHeight: '80vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center'
+      }}>
+        <div style={{
+          backgroundColor: 'var(--color-card)',
+          borderRadius: '1.8rem',
+          padding: '2.5rem 1.8rem',
+          maxWidth: '380px',
+          width: '100%',
+          boxShadow: 'var(--shadow-card)',
+          border: '1px solid var(--color-border)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '1.4rem',
+            backgroundColor: 'var(--color-card-alt)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '1.2rem',
+            border: '1px solid var(--color-border)'
+          }}>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+              <line x1="9" y1="3" x2="9" y2="18" />
+              <line x1="15" y1="6" x2="15" y2="21" />
+            </svg>
+          </div>
+
+          <h2 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '1.5rem',
+            fontWeight: '700',
+            color: 'var(--color-text)',
+            margin: '0 0 0.5rem 0'
+          }}>
+            Rutas y Caminatas
+          </h2>
+
+          <p style={{
+            fontFamily: 'var(--font-main)',
+            fontSize: '0.9rem',
+            color: 'var(--color-text-muted)',
+            lineHeight: '1.5',
+            margin: '0 0 1.8rem 0'
+          }}>
+            Inicia sesión o crea una cuenta para trazar tus rutas, registrar tus pasos en el mapa y ganar Latidos caminando por tu barrio.
+          </p>
+
+          <button
+            onClick={() => navigate('/login')}
+            style={{
+              backgroundColor: 'var(--color-accent)',
+              color: 'white',
+              padding: '0.95rem 1.8rem',
+              borderRadius: '2rem',
+              fontFamily: 'var(--font-main)',
+              fontWeight: '700',
+              fontSize: '0.95rem',
+              border: 'none',
+              cursor: 'pointer',
+              width: '100%',
+              boxShadow: 'var(--shadow-card)',
+              transition: 'transform 0.15s ease'
+            }}
+          >
+            Iniciar sesión
+          </button>
+        </div>
       </div>
     );
   }
@@ -902,86 +979,249 @@ const RutasPage = () => {
         )}
       </div>
 
-      {/* Rutas Guardadas y Populares */}
-      <div style={{ margin: '0 1rem' }}>
-        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: 'var(--color-text)', marginBottom: '1rem' }}>
-          {tr?.rutasGuardadas || 'Rutas Recomendadas y Guardadas'}
-        </h3>
-        
-        {/* Render Saved + Popular Routes */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-          {allRoutesList.map((rt) => {
-            const rtPoints = getSafePoints(rt);
-            const rtPath = getSafePath(rt);
-            const isExpanded = expandedRouteId === rt.id;
-            const distanceNum = typeof rt.distance === 'number' ? rt.distance : parseFloat(rt.distance) || 0;
-            const stepsCount = Math.round(distanceNum * 1312);
+      {/* Selector de pestañas: Rutas recomendadas / Mis rutas */}
+      <div style={{ margin: '0 1rem 1rem' }}>
+        <div style={{
+          display: 'flex',
+          backgroundColor: 'var(--color-card)',
+          borderRadius: '2rem',
+          padding: '0.35rem',
+          boxShadow: 'var(--shadow-card)',
+          border: '1px solid var(--color-border)',
+          gap: '0.3rem'
+        }}>
+          <button
+            onClick={() => setActiveTab('recommended')}
+            style={{
+              flex: 1,
+              padding: '0.75rem 0.5rem',
+              borderRadius: '1.8rem',
+              border: 'none',
+              backgroundColor: activeTab === 'recommended' ? 'var(--color-header-bg)' : 'transparent',
+              color: activeTab === 'recommended' ? 'var(--color-header-text)' : 'var(--color-text-muted)',
+              fontFamily: 'var(--font-main)',
+              fontWeight: '700',
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.4rem',
+              boxShadow: activeTab === 'recommended' ? '0 2px 8px rgba(0,0,0,0.1)' : 'none'
+            }}
+          >
+            <span>🌟</span> {tr?.rutasRecomendadas || 'Rutas recomendadas'} ({recommendedRoutes?.length || 0})
+          </button>
 
-            return (
-              <div 
-                key={rt.id} 
-                style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '1.2rem', boxShadow: 'var(--shadow-card)', cursor: 'pointer' }}
-                onClick={() => setExpandedRouteId(isExpanded ? null : rt.id)}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
-                      <h4 style={{ color: 'var(--color-text)', fontSize: '1.1rem', fontFamily: 'var(--font-main)', margin: 0 }}>{rt.name}</h4>
-                      {String(rt.id).startsWith('pop-') && (
-                        <span style={{ fontSize: '0.68rem', backgroundColor: 'rgba(34, 197, 94, 0.15)', color: '#16a34a', padding: '0.15rem 0.5rem', borderRadius: '0.8rem', fontWeight: '700' }}>
-                          ⭐ Popular
-                        </span>
-                      )}
-                    </div>
-                    <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', margin: 0 }}>
-                      {distanceNum.toFixed(2).replace('.', ',')} km • {stepsCount.toLocaleString('es-ES')} {tr?.pasos || 'pasos'} • {formatTime(rt.duration)}
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <div style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: '#16a34a', padding: '0.4rem 0.8rem', borderRadius: '1rem', fontSize: '0.85rem', fontWeight: '700' }}>
-                      +{rt.latidos_earned || 0} ❤
-                    </div>
-                  </div>
-                </div>
-
-                {isExpanded && (
-                  <div style={{ marginTop: '1rem' }}>
-                    {/* Route points preview with distances */}
-                    {rtPoints.length > 0 && (
-                      <div style={{ marginBottom: '0.8rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                        {rtPoints.map((p, idx) => (
-                          <span key={idx} style={{ fontSize: '0.75rem', backgroundColor: 'var(--color-card-alt)', border: '1px solid rgba(34,197,94,0.3)', padding: '0.3rem 0.6rem', borderRadius: '0.8rem', color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            <span>📍</span> {p.name || `Punto ${idx + 1}`} <strong style={{ color: '#16a34a' }}>(a {formatDistance(haversineDist(currentPos, p))})</strong>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleReplicar(rt); }} 
-                        style={{ flex: '1 1 100%', padding: '0.75rem', borderRadius: '0.8rem', border: 'none', backgroundColor: '#22c55e', color: 'white', fontSize: '0.9rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', boxShadow: '0 4px 10px rgba(34, 197, 94, 0.3)' }}
-                      >
-                        ▶ {tr?.repetirRuta || 'Comenzar esta ruta'}
-                      </button>
-                      {!String(rt.id).startsWith('pop-') && (
-                        <>
-                          <button onClick={(e) => { e.stopPropagation(); setEditingRoute(rt); }} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.8rem', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text)', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
-                            ✏️ {tr?.editar || 'Editar'}
-                          </button>
-                          <button onClick={(e) => handleDelete(e, rt.id)} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.8rem', border: 'none', backgroundColor: '#e74c3c', color: 'white', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
-                            🗑️ {tr?.eliminar || 'Eliminar'}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                    <RouteMap routePath={rtPath} routePoints={rtPoints} currentPos={currentPos} tr={tr} />
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          <button
+            onClick={() => setActiveTab('my_routes')}
+            style={{
+              flex: 1,
+              padding: '0.75rem 0.5rem',
+              borderRadius: '1.8rem',
+              border: 'none',
+              backgroundColor: activeTab === 'my_routes' ? 'var(--color-header-bg)' : 'transparent',
+              color: activeTab === 'my_routes' ? 'var(--color-header-text)' : 'var(--color-text-muted)',
+              fontFamily: 'var(--font-main)',
+              fontWeight: '700',
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.4rem',
+              boxShadow: activeTab === 'my_routes' ? '0 2px 8px rgba(0,0,0,0.1)' : 'none'
+            }}
+          >
+            <span>📌</span> {tr?.misRutas || 'Mis rutas'} ({savedRoutes?.length || 0})
+          </button>
         </div>
+      </div>
+
+      {/* Lista de Rutas según la pestaña activa */}
+      <div style={{ margin: '0 1rem' }}>
+        {activeTab === 'recommended' ? (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', color: 'var(--color-text)', margin: 0 }}>
+                {tr?.rutasRecomendadas || 'Rutas Recomendadas'}
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                Oficiales de la comunidad
+              </span>
+            </div>
+
+            {(!recommendedRoutes || recommendedRoutes.length === 0) ? (
+              <div style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '2rem', textAlign: 'center', boxShadow: 'var(--shadow-card)', border: '1px solid var(--color-border)' }}>
+                <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.9rem' }}>
+                  {tr?.sinRutasRecomendadas || 'Aún no hay rutas recomendadas disponibles.'}
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                {recommendedRoutes.map((rt) => {
+                  const rtPoints = getSafePoints(rt);
+                  const rtPath = getSafePath(rt);
+                  const isExpanded = expandedRouteId === rt.id;
+                  const distanceNum = typeof rt.distance === 'number' ? rt.distance : parseFloat(rt.distance) || 0;
+                  const stepsCount = Math.round(distanceNum * 1312);
+
+                  return (
+                    <div 
+                      key={rt.id} 
+                      style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '1.2rem', boxShadow: 'var(--shadow-card)', border: '1px solid var(--color-border)', cursor: 'pointer' }}
+                      onClick={() => setExpandedRouteId(isExpanded ? null : rt.id)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.2rem' }}>
+                            <h4 style={{ color: 'var(--color-text)', fontSize: '1.1rem', fontFamily: 'var(--font-main)', margin: 0, fontWeight: '700' }}>{rt.name}</h4>
+                            <span style={{ fontSize: '0.68rem', backgroundColor: 'rgba(34, 197, 94, 0.15)', color: '#16a34a', padding: '0.15rem 0.5rem', borderRadius: '0.8rem', fontWeight: '700' }}>
+                              ⭐ Recomendada
+                            </span>
+                          </div>
+                          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', margin: 0 }}>
+                            {distanceNum.toFixed(2).replace('.', ',')} km • {stepsCount.toLocaleString('es-ES')} {tr?.pasos || 'pasos'} • {formatTime(rt.duration)}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          <div style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: '#16a34a', padding: '0.4rem 0.8rem', borderRadius: '1rem', fontSize: '0.85rem', fontWeight: '800' }}>
+                            +{rt.latidos_earned || 0} ❤
+                          </div>
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div style={{ marginTop: '1rem' }}>
+                          {/* Route points preview with distances */}
+                          {rtPoints.length > 0 && (
+                            <div style={{ marginBottom: '0.8rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                              {rtPoints.map((p, idx) => (
+                                <span key={idx} style={{ fontSize: '0.75rem', backgroundColor: 'var(--color-card-alt)', border: '1px solid rgba(34,197,94,0.3)', padding: '0.3rem 0.6rem', borderRadius: '0.8rem', color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                  <span>📍</span> {p.name || `Punto ${idx + 1}`} <strong style={{ color: '#16a34a' }}>(a {formatDistance(haversineDist(currentPos, p))})</strong>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleReplicar(rt); }} 
+                              style={{ flex: '1 1 100%', padding: '0.75rem', borderRadius: '0.8rem', border: 'none', backgroundColor: '#22c55e', color: 'white', fontSize: '0.9rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', boxShadow: '0 4px 10px rgba(34, 197, 94, 0.3)' }}
+                            >
+                              ▶ {tr?.repetirRuta || 'Comenzar esta ruta'}
+                            </button>
+                          </div>
+                          <RouteMap routePath={rtPath} routePoints={rtPoints} currentPos={currentPos} tr={tr} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', color: 'var(--color-text)', margin: 0 }}>
+                {tr?.misRutas || 'Mis Rutas'}
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                Tus recorridos grabados
+              </span>
+            </div>
+
+            {(!savedRoutes || savedRoutes.length === 0) ? (
+              <div style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '2rem 1.5rem', textAlign: 'center', boxShadow: 'var(--shadow-card)', border: '1px solid var(--color-border)' }}>
+                <p style={{ color: 'var(--color-text-muted)', marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                  {tr?.sinRutas || 'Aún no tienes rutas guardadas. ¡Sal a caminar y graba tu primera ruta!'}
+                </p>
+                <button
+                  onClick={handleStartRoute}
+                  style={{
+                    backgroundColor: '#22c55e',
+                    color: 'white',
+                    padding: '0.75rem 1.4rem',
+                    borderRadius: '2rem',
+                    border: 'none',
+                    fontWeight: '700',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)'
+                  }}
+                >
+                  ▶ {tr?.iniciarRuta || 'Iniciar ruta ahora'}
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                {savedRoutes.map((rt) => {
+                  const rtPoints = getSafePoints(rt);
+                  const rtPath = getSafePath(rt);
+                  const isExpanded = expandedRouteId === rt.id;
+                  const distanceNum = typeof rt.distance === 'number' ? rt.distance : parseFloat(rt.distance) || 0;
+                  const stepsCount = Math.round(distanceNum * 1312);
+
+                  return (
+                    <div 
+                      key={rt.id} 
+                      style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '1.2rem', boxShadow: 'var(--shadow-card)', border: '1px solid var(--color-border)', cursor: 'pointer' }}
+                      onClick={() => setExpandedRouteId(isExpanded ? null : rt.id)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <h4 style={{ color: 'var(--color-text)', fontSize: '1.1rem', fontFamily: 'var(--font-main)', margin: '0 0 0.2rem 0', fontWeight: '700' }}>{rt.name}</h4>
+                          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', margin: 0 }}>
+                            {distanceNum.toFixed(2).replace('.', ',')} km • {stepsCount.toLocaleString('es-ES')} {tr?.pasos || 'pasos'} • {formatTime(rt.duration)}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          <div style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: '#16a34a', padding: '0.4rem 0.8rem', borderRadius: '1rem', fontSize: '0.85rem', fontWeight: '800' }}>
+                            +{rt.latidos_earned || 0} ❤
+                          </div>
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div style={{ marginTop: '1rem' }}>
+                          {/* Route points preview with distances */}
+                          {rtPoints.length > 0 && (
+                            <div style={{ marginBottom: '0.8rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                              {rtPoints.map((p, idx) => (
+                                <span key={idx} style={{ fontSize: '0.75rem', backgroundColor: 'var(--color-card-alt)', border: '1px solid rgba(34,197,94,0.3)', padding: '0.3rem 0.6rem', borderRadius: '0.8rem', color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                  <span>📍</span> {p.name || `Punto ${idx + 1}`} <strong style={{ color: '#16a34a' }}>(a {formatDistance(haversineDist(currentPos, p))})</strong>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleReplicar(rt); }} 
+                              style={{ flex: '1 1 100%', padding: '0.75rem', borderRadius: '0.8rem', border: 'none', backgroundColor: '#22c55e', color: 'white', fontSize: '0.9rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', boxShadow: '0 4px 10px rgba(34, 197, 94, 0.3)' }}
+                            >
+                              ▶ {tr?.repetirRuta || 'Comenzar esta ruta'}
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); setEditingRoute(rt); }} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.8rem', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text)', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
+                              ✏️ {tr?.editar || 'Editar'}
+                            </button>
+                            <button onClick={(e) => handleDelete(e, rt.id)} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.8rem', border: 'none', backgroundColor: '#e74c3c', color: 'white', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer' }}>
+                              🗑️ {tr?.eliminar || 'Eliminar'}
+                            </button>
+                          </div>
+                          <RouteMap routePath={rtPath} routePoints={rtPoints} currentPos={currentPos} tr={tr} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {showSaveModal && (
