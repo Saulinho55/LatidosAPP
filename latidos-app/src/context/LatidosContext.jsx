@@ -682,6 +682,17 @@ export const LatidosProvider = ({ children }) => {
     }
   };
 
+  const updateComercioProductos = async (comercioId, productos) => {
+    const targetId = Number(comercioId || user?.comercio_id || 2);
+    try {
+      await supabaseService.updateComercioProductos(targetId, productos);
+      return true;
+    } catch (e) {
+      console.error('Error updating comercio productos:', e);
+      return false;
+    }
+  };
+
   const registrarActividad = async (pasos, latidosGanados) => {
     if (!userId) return;
     const fecha = new Date().toISOString().slice(0, 10);
@@ -714,7 +725,7 @@ export const LatidosProvider = ({ children }) => {
       saveRoute, deleteRoute, updateRoute, login, logout, loginUser, registerUser,
       fetchAdminStats, fetchAdminUsers, createUser, fetchComercios, createComercio, updateComercio,
       deleteComercio, updateUser, deleteUser, validarBono, fetchComercioStats, updateComercioBonos,
-      updateComercioHorarios,
+      updateComercioHorarios, updateComercioProductos,
       registrarActividad
     }}>
       {children}

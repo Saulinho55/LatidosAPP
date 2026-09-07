@@ -18,6 +18,7 @@ import ComercioLayout from './pages/comercio/ComercioLayout';
 import ComercioHoy from './pages/comercio/ComercioHoy';
 import ComercioValidar from './pages/comercio/ComercioValidar';
 import ComercioBonos from './pages/comercio/ComercioBonos';
+import ComercioProductos from './pages/comercio/ComercioProductos';
 import ComercioHorario from './pages/comercio/ComercioHorario';
 import ComercioInforme from './pages/comercio/ComercioInforme';
 import SplashScreen from './components/SplashScreen';
@@ -97,6 +98,7 @@ function App() {
 
             <Route path="/comercio" element={<ComercioLayout />}>
               <Route index element={<ComercioHoy />} />
+              <Route path="productos" element={<ComercioProductos />} />
               <Route path="validar" element={<ComercioValidar />} />
               <Route path="bonos" element={<ComercioBonos />} />
               <Route path="horario" element={<ComercioHorario />} />

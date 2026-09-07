@@ -81,6 +81,7 @@ const ComercioLayout = () => {
 
   const tabs = [
     { path: '/comercio', label: 'Hoy', icon: '📊' },
+    { path: '/comercio/productos', label: 'Productos & Servicios', icon: '🛍️' },
     { path: '/comercio/validar', label: 'Validar bono', icon: '🎟️' },
     { path: '/comercio/bonos', label: 'Mis bonos', icon: '🎁' },
     { path: '/comercio/horario', label: 'Horarios & Avisos', icon: '🕒' },

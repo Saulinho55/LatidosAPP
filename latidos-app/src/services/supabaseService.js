@@ -247,6 +247,24 @@ export const supabaseService = {
     return data;
   },
 
+  async updateComercioProductos(id, productos) {
+    const numericId = Number(id);
+    const prodList = Array.isArray(productos) ? productos : (typeof productos === 'string' ? JSON.parse(productos || '[]') : []);
+    try {
+      localStorage.setItem(`latidos_comercio_productos_${numericId}`, JSON.stringify(prodList));
+    } catch (e) {}
+
+    try {
+      const payload = {
+        productos: typeof productos === 'string' ? productos : JSON.stringify(prodList)
+      };
+      await supabase.from('comercios').update(payload).eq('id', numericId);
+    } catch (e) {
+      // Graceful fallback if remote column is not present
+    }
+    return prodList;
+  },
+
   async deleteComercio(id) {
     const { error } = await supabase.from('comercios').delete().eq('id', id);
     if (error) throw error;
