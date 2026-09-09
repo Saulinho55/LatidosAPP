@@ -444,13 +444,17 @@ export const LatidosProvider = ({ children }) => {
         setActiveCode(null);
         localStorage.removeItem('latidos_active_code');
         const shopName = tx.comercio_nombre || activeCode.comercioNombre || 'el comercio';
-        const refundPts = activeCode.latidosUsados || 0;
+        const refundPts = Number(activeCode.latidosUsados) || 0;
+
+        if (refundPts > 0) {
+          setLatidos(prev => prev + refundPts);
+        }
 
         setActiveCodeNotification(`Bono ${cleanCode} cancelado por ${shopName}. Se te han devuelto ${refundPts} Latidos.`);
 
         if (currentUid) {
           supabaseService.getUserById(currentUid).then(u => {
-            if (u && isMounted) setLatidos(u.latidos || 0);
+            if (u && isMounted && typeof u.latidos === 'number') setLatidos(u.latidos);
           }).catch(console.error);
           supabaseService.getTransactions(currentUid)
             .then(txs => { if (isMounted) setTransactions(txs); })
@@ -1041,13 +1045,17 @@ export const LatidosProvider = ({ children }) => {
     try {
       const updatedTx = await supabaseService.rechazarBono(txIdOrCode);
 
-      // If activeCode matches this rejected code, clear it locally
+      // If activeCode matches this rejected code, clear it locally and refund immediately
       try {
         const cleanCode = (typeof txIdOrCode === 'string' ? txIdOrCode : '').trim().toUpperCase();
         const saved = localStorage.getItem('latidos_active_code');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed && (parsed.code === cleanCode || parsed.code === `LAT-${cleanCode}` || parsed.txId === txIdOrCode)) {
+            const refundAmount = Number(parsed.latidosUsados) || 0;
+            if (refundAmount > 0) {
+              setLatidos(prev => prev + refundAmount);
+            }
             setActiveCode(null);
             localStorage.removeItem('latidos_active_code');
           }
@@ -1059,8 +1067,8 @@ export const LatidosProvider = ({ children }) => {
       if (currentUid) {
         try {
           const freshUser = await supabaseService.getUserById(currentUid);
-          if (freshUser) {
-            setLatidos(freshUser.latidos || 0);
+          if (freshUser && typeof freshUser.latidos === 'number') {
+            setLatidos(freshUser.latidos);
           }
           const freshTxs = await supabaseService.getTransactions(currentUid);
           if (freshTxs) {
