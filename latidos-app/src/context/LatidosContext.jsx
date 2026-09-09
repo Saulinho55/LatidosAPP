@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { supabase } from '../lib/supabase';
 import { supabaseService } from '../services/supabaseService';
 import { haversineDistance } from '../hooks/useGeolocation';
 import { t } from '../i18n';
@@ -406,27 +407,71 @@ export const LatidosProvider = ({ children }) => {
     }, 500);
   };
 
-  // Real-time polling to detect when merchant validates the coupon
+  // Instant Real-time WebSocket + 1-second fallback poll for coupon validation
   useEffect(() => {
-    if (!activeCode) return;
+    if (!activeCode || !activeCode.code) return;
 
     let isMounted = true;
+    const cleanCode = activeCode.code.trim().toUpperCase();
+
+    const handleValidatedTx = (tx) => {
+      if (!isMounted) return;
+      if (tx && ((tx.importe_compra && parseFloat(tx.importe_compra) > 0) || tx.estado === 'validated')) {
+        setActiveCode(null);
+        localStorage.removeItem('latidos_active_code');
+        const shopName = tx.comercio_nombre || activeCode.comercioNombre || 'el comercio';
+        const amountStr = tx.importe_compra ? ` (${parseFloat(tx.importe_compra).toFixed(2)} € registrado)` : '';
+        setActiveCodeNotification(`¡Bono validado y canjeado al instante en ${shopName}!${amountStr}`);
+
+        const currentUid = userId || user?.id || parseInt(localStorage.getItem('latidos_user_id'), 10);
+        if (currentUid) {
+          supabaseService.getTransactions(currentUid)
+            .then(txs => { if (isMounted) setTransactions(txs); })
+            .catch(console.error);
+        }
+      }
+    };
+
+    // 1. Supabase Realtime WebSocket subscription (instant event delivery < 100ms)
+    const channel = supabase
+      .channel(`canje-instant-${cleanCode}-${Date.now()}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'transactions'
+        },
+        (payload) => {
+          const row = payload?.new;
+          if (row && row.code && row.code.trim().toUpperCase() === cleanCode) {
+            handleValidatedTx(row);
+          }
+        }
+      )
+      .subscribe();
+
+    // 2. Immediate check upon render
+    supabaseService.getTransactionByCode(cleanCode).then(tx => {
+      if (tx && isMounted) handleValidatedTx(tx);
+    }).catch(() => {});
+
+    // 3. Fast 1-second fallback poll
     const pollInterval = setInterval(async () => {
       try {
-        const dbTx = await supabaseService.getTransactionByCode(activeCode.code);
-        if (dbTx && dbTx.importe_compra && parseFloat(dbTx.importe_compra) > 0 && isMounted) {
-          setActiveCode(null);
-          localStorage.removeItem('latidos_active_code');
-          setActiveCodeNotification(`¡Bono canjeado con éxito en ${activeCode.comercioNombre || 'el comercio'}! (${parseFloat(dbTx.importe_compra).toFixed(2)} € de compra registrada)`);
+        const dbTx = await supabaseService.getTransactionByCode(cleanCode);
+        if (dbTx && isMounted) {
+          handleValidatedTx(dbTx);
         }
       } catch (err) {}
-    }, 3000);
+    }, 1000);
 
     return () => {
       isMounted = false;
       clearInterval(pollInterval);
+      supabase.removeChannel(channel);
     };
-  }, [activeCode]);
+  }, [activeCode, userId]);
 
   useEffect(() => {
     if (!activeCode) return;
