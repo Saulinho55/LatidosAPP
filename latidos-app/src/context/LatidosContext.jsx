@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabaseService } from '../services/supabaseService';
+import { haversineDistance } from '../hooks/useGeolocation';
 import { t } from '../i18n';
 
 const LatidosContext = createContext(null);
@@ -24,6 +25,149 @@ export const LatidosProvider = ({ children }) => {
   const [userId, setUserId] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // ── Persistent Active Route Session (persists across tab changes) ──
+  const [isRouteActive, setIsRouteActive] = useState(false);
+  const [isRouteTracking, setIsRouteTracking] = useState(false);
+  const [routeElapsed, setRouteElapsed] = useState(0);
+  const [routeDistanceM, setRouteDistanceM] = useState(0);
+  const [routePath, setRoutePath] = useState([]);
+  const [routePoints, setRoutePoints] = useState([]);
+  const [replicatedRoute, setReplicatedRoute] = useState(null);
+  const [isVehicleDetected, setIsVehicleDetected] = useState(false);
+  const [currentSpeedKmh, setCurrentSpeedKmh] = useState(0);
+  const [currentPosition, setCurrentPosition] = useState({ lat: 28.0048, lon: -15.4158, accuracy: 100, speed: 0 });
+
+  const routeWatchIdRef = useRef(null);
+  const routeLastPointRef = useRef(null);
+  const routeLastTimeRef = useRef(null);
+  const routeTimerRef = useRef(null);
+  const lastRouteStepsAwardedRef = useRef(0);
+
+  // Get initial location
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude: lat, longitude: lon, accuracy, speed } = pos.coords;
+          setCurrentPosition({ lat, lon, accuracy, speed: speed || 0 });
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+      );
+    }
+  }, []);
+
+  // Timer for active route
+  useEffect(() => {
+    if (isRouteTracking) {
+      routeTimerRef.current = setInterval(() => {
+        setRouteElapsed(prev => prev + 1);
+      }, 1000);
+    } else {
+      clearInterval(routeTimerRef.current);
+    }
+    return () => clearInterval(routeTimerRef.current);
+  }, [isRouteTracking]);
+
+  // GPS Tracking for active route
+  useEffect(() => {
+    if (!isRouteTracking) {
+      if (routeWatchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(routeWatchIdRef.current);
+        routeWatchIdRef.current = null;
+      }
+      return;
+    }
+
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    routeWatchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lon, accuracy, speed } = pos.coords;
+        const now = Date.now();
+        const newPoint = { lat, lon };
+
+        let speedKmh = 0;
+        if (typeof speed === 'number' && speed >= 0) {
+          speedKmh = speed * 3.6;
+        } else if (routeLastPointRef.current && routeLastTimeRef.current) {
+          const dt = (now - routeLastTimeRef.current) / 1000;
+          if (dt > 0.5) {
+            const d = haversineDistance(routeLastPointRef.current, newPoint);
+            speedKmh = (d / dt) * 3.6;
+          }
+        }
+
+        setCurrentSpeedKmh(speedKmh);
+        setCurrentPosition({ lat, lon, accuracy, speed: speedKmh / 3.6 });
+
+        // Vehicular speed check (car, motorbike, electric scooter > 20 km/h)
+        if (speedKmh > 20.0) {
+          setIsVehicleDetected(true);
+          routeLastPointRef.current = newPoint;
+          routeLastTimeRef.current = now;
+          return;
+        } else {
+          setIsVehicleDetected(false);
+        }
+
+        setRoutePath(prev => [...prev, newPoint]);
+
+        if (routeLastPointRef.current) {
+          const dist = haversineDistance(routeLastPointRef.current, newPoint);
+          if (dist > 2.5 && dist < 150) {
+            setRouteDistanceM(prevDist => {
+              const nextDist = prevDist + dist;
+              
+              // Real-time steps calculation and synchronization:
+              const totalRouteSteps = Math.round(nextDist * 1.312);
+              const stepsDelta = totalRouteSteps - lastRouteStepsAwardedRef.current;
+              
+              if (stepsDelta > 0) {
+                lastRouteStepsAwardedRef.current = totalRouteSteps;
+                setSteps(prevSteps => {
+                  const updatedTotalSteps = prevSteps + stepsDelta;
+                  const uid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
+                  if (uid) {
+                    supabaseService.updateUser(uid, { steps_today: updatedTotalSteps }).catch(console.error);
+                  }
+                  return updatedTotalSteps;
+                });
+
+                // Real-time Latidos gain
+                const newLatidos = Math.floor(stepsDelta / 100);
+                if (newLatidos > 0) {
+                  ganarLatidos(newLatidos);
+                  const uid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
+                  if (uid) {
+                    const fecha = new Date().toISOString().slice(0, 10);
+                    supabaseService.upsertActivity(uid, fecha, steps + stepsDelta, newLatidos).catch(console.error);
+                  }
+                }
+              }
+
+              return nextDist;
+            });
+            routeLastPointRef.current = newPoint;
+            routeLastTimeRef.current = now;
+          }
+        } else {
+          routeLastPointRef.current = newPoint;
+          routeLastTimeRef.current = now;
+        }
+      },
+      (err) => console.warn('Geolocation error:', err),
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+    );
+
+    return () => {
+      if (routeWatchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(routeWatchIdRef.current);
+        routeWatchIdRef.current = null;
+      }
+    };
+  }, [isRouteTracking, userId, steps]);
 
   const loadRecommendedRoutes = async () => {
     try {
@@ -145,10 +289,11 @@ export const LatidosProvider = ({ children }) => {
   const canjearLatidos = (coste) => {
     const num = Number(coste) || 0;
     if (latidos < num) return false;
+    const targetUid = userId || user?.id || parseInt(localStorage.getItem('latidos_user_id'), 10);
     setLatidos(prev => {
       const next = Math.max(0, prev - num);
-      if (userId) {
-        supabaseService.updateUser(userId, { latidos: next }).catch(console.error);
+      if (targetUid) {
+        supabaseService.updateUser(targetUid, { latidos: next }).catch(console.error);
       }
       return next;
     });
@@ -157,12 +302,13 @@ export const LatidosProvider = ({ children }) => {
 
   const updateSteps = async (newSteps) => {
     setSteps(newSteps);
-    if (!userId) return;
+    const targetUid = userId || user?.id || parseInt(localStorage.getItem('latidos_user_id'), 10);
+    if (!targetUid) return;
 
     try {
-      await supabaseService.updateUser(userId, { steps_today: newSteps });
+      await supabaseService.updateUser(targetUid, { steps_today: newSteps });
       const fecha = new Date().toISOString().slice(0, 10);
-      const updatedAct = await supabaseService.upsertActivity(userId, fecha, newSteps, 0);
+      const updatedAct = await supabaseService.upsertActivity(targetUid, fecha, newSteps, 0);
       if (updatedAct) {
         setActivity(prev => {
           const exists = prev.some(a => a.id === updatedAct.id);
@@ -209,28 +355,41 @@ export const LatidosProvider = ({ children }) => {
       return;
     }
 
+    const { code, txId, comercioNombre, descuento } = currentCode;
+    const refundAmount = Number(currentCode.latidosUsados) || 0;
+    const currentUid = userId || user?.id || parseInt(localStorage.getItem('latidos_user_id'), 10);
+
+    // Verify in Supabase whether this transaction was already validated
+    let alreadyValidated = false;
+    try {
+      const dbTx = await supabaseService.getTransactionByCode(code);
+      if (dbTx && dbTx.importe_compra && parseFloat(dbTx.importe_compra) > 0) {
+        alreadyValidated = true;
+      }
+    } catch (e) {
+      console.error('Error checking code status in Supabase:', e);
+    }
+
     setActiveCode(null);
     localStorage.removeItem('latidos_active_code');
 
-    const refundAmount = Number(currentCode.latidosUsados) || 0;
-    const { code, txId, descuento } = currentCode;
+    if (alreadyValidated) {
+      setActiveCodeNotification(`¡Bono canjeado con éxito en ${comercioNombre || 'el comercio'}! Descuento aplicado.`);
+      setTimeout(() => {
+        isRefundingRef.current = false;
+      }, 500);
+      return;
+    }
 
-    if (refundAmount > 0 && userId) {
+    if (refundAmount > 0 && currentUid) {
       setLatidos(prev => {
         const next = prev + refundAmount;
-        supabaseService.updateUser(userId, { latidos: next }).catch(console.error);
+        supabaseService.updateUser(currentUid, { latidos: next }).catch(console.error);
         return next;
       });
 
-      const tag = reason === 'cancelled' ? '(Cancelado - Devuelto)' : '(Caducado - Devuelto)';
-      if (txId) {
-        supabaseService.updateTransaction(txId, { descuento: `${descuento} ${tag}` })
-          .then(() => supabaseService.getTransactions(userId))
-          .then(txs => setTransactions(txs))
-          .catch(console.error);
-      } else if (code) {
-        supabaseService.updateTransactionByCode(code, { descuento: `${descuento} ${tag}` })
-          .then(() => supabaseService.getTransactions(userId))
+      if (currentUid) {
+        supabaseService.getTransactions(currentUid)
           .then(txs => setTransactions(txs))
           .catch(console.error);
       }
@@ -246,6 +405,28 @@ export const LatidosProvider = ({ children }) => {
       isRefundingRef.current = false;
     }, 500);
   };
+
+  // Real-time polling to detect when merchant validates the coupon
+  useEffect(() => {
+    if (!activeCode) return;
+
+    let isMounted = true;
+    const pollInterval = setInterval(async () => {
+      try {
+        const dbTx = await supabaseService.getTransactionByCode(activeCode.code);
+        if (dbTx && dbTx.importe_compra && parseFloat(dbTx.importe_compra) > 0 && isMounted) {
+          setActiveCode(null);
+          localStorage.removeItem('latidos_active_code');
+          setActiveCodeNotification(`¡Bono canjeado con éxito en ${activeCode.comercioNombre || 'el comercio'}! (${parseFloat(dbTx.importe_compra).toFixed(2)} € de compra registrada)`);
+        }
+      } catch (err) {}
+    }, 3000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+    };
+  }, [activeCode]);
 
   useEffect(() => {
     if (!activeCode) return;
@@ -491,8 +672,20 @@ export const LatidosProvider = ({ children }) => {
         if (userData.role === 'superadmin' && user?.role !== 'superadmin') {
           return { success: false, error: 'Solo un SuperAdministrador puede otorgar el rol de SuperAdministrador.' };
         }
-        await supabaseService.updateUser(id, userData);
-        return { success: true };
+        const updated = await supabaseService.updateUser(id, userData);
+
+        // If current user is modifying their own account, update context state immediately
+        const currentUid = userId || user?.id || parseInt(localStorage.getItem('latidos_user_id'), 10);
+        if (Number(id) === Number(currentUid)) {
+          if (userData.latidos !== undefined) setLatidos(parseInt(userData.latidos, 10) || 0);
+          if (userData.steps_today !== undefined) setSteps(parseInt(userData.steps_today, 10) || 0);
+          if (userData.racha !== undefined) setRacha(parseInt(userData.racha, 10) || 0);
+          if (userData.name) setUser(prev => prev ? ({ ...prev, name: userData.name }) : prev);
+          if (userData.email) setUser(prev => prev ? ({ ...prev, email: userData.email }) : prev);
+          if (userData.role) setUser(prev => prev ? ({ ...prev, role: userData.role }) : prev);
+        }
+
+        return { success: true, data: updated };
       }
       return { success: false, error: 'Usuario no encontrado' };
     } catch (e) {
@@ -658,10 +851,86 @@ export const LatidosProvider = ({ children }) => {
     }
   };
 
+  // ── Global Route Session Controls ──
+  const startRouteSession = (targetReplicated = null) => {
+    setIsRouteActive(true);
+    setIsRouteTracking(true);
+    setRouteElapsed(0);
+    setRouteDistanceM(0);
+    setRoutePoints([]);
+    setReplicatedRoute(targetReplicated || null);
+    setIsVehicleDetected(false);
+    lastRouteStepsAwardedRef.current = 0;
+    routeLastPointRef.current = currentPosition ? { lat: currentPosition.lat, lon: currentPosition.lon } : null;
+    routeLastTimeRef.current = Date.now();
+    setRoutePath(currentPosition ? [{ lat: currentPosition.lat, lon: currentPosition.lon }] : []);
+  };
+
+  const pauseRouteSession = () => {
+    setIsRouteTracking(false);
+  };
+
+  const resumeRouteSession = () => {
+    setIsRouteTracking(true);
+    routeLastTimeRef.current = Date.now();
+  };
+
+  const discardRouteSession = () => {
+    setIsRouteActive(false);
+    setIsRouteTracking(false);
+    setRouteElapsed(0);
+    setRouteDistanceM(0);
+    setRoutePath([]);
+    setRoutePoints([]);
+    setReplicatedRoute(null);
+    setIsVehicleDetected(false);
+    lastRouteStepsAwardedRef.current = 0;
+    routeLastPointRef.current = null;
+    routeLastTimeRef.current = null;
+  };
+
+  const addRouteCheckpoint = (name, customCoords = null) => {
+    const coords = customCoords || currentPosition || { lat: 28.0048, lon: -15.4158 };
+    const ptName = (name && typeof name === 'string' && name.trim()) 
+      ? name.trim() 
+      : `Punto ${routePoints.length + 1}`;
+    setRoutePoints(prev => [...prev, { lat: coords.lat, lon: coords.lon, name: ptName, time: Date.now() }]);
+  };
+
+  const removeRouteCheckpoint = (index) => {
+    setRoutePoints(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const finishRouteSession = async (finalRouteName) => {
+    setIsRouteTracking(false);
+    const finalName = (finalRouteName && finalRouteName.trim()) 
+      ? finalRouteName.trim() 
+      : (replicatedRoute ? `Re: ${replicatedRoute.name}` : `Paseo ${new Date().toLocaleDateString('es-ES')}`);
+    
+    const routeSteps = Math.round(routeDistanceM * 1.312);
+    const latidosEarned = Math.floor(routeSteps / 100);
+    const finalRouteData = {
+      name: finalName,
+      distance: (routeDistanceM || 0) / 1000,
+      duration: routeElapsed || 1,
+      latidos_earned: latidosEarned,
+      path: routePath && routePath.length > 0 ? routePath : (currentPosition ? [{ lat: currentPosition.lat, lon: currentPosition.lon }] : [{ lat: 28.0048, lon: -15.4158 }]),
+      points: routePoints || []
+    };
+
+    if (userId) {
+      await saveRoute(finalRouteData);
+    }
+    
+    discardRouteSession();
+    return finalRouteData;
+  };
+
   // ── Comercio Extra ──
   const validarBono = async (codigo, importe) => {
+    const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
     let comId = user?.comercio_id;
-    if (!comId) {
+    if (!comId && !isAdmin) {
       try {
         const cList = await supabaseService.getComercios();
         const match = cList.find(c => 
@@ -670,15 +939,12 @@ export const LatidosProvider = ({ children }) => {
         );
         if (match) {
           comId = match.id;
-        } else if (cList.length > 0) {
-          comId = cList[0].id;
         }
       } catch (e) {}
     }
 
-    if (!comId) return { success: false, error: 'No tienes un comercio asociado a tu cuenta.' };
     try {
-      const updatedTx = await supabaseService.validateBono(codigo, comId, importe);
+      const updatedTx = await supabaseService.validateBono(codigo, comId, importe, isAdmin);
 
       // If activeCode matches this validated code, clear it
       try {
@@ -791,6 +1057,11 @@ export const LatidosProvider = ({ children }) => {
       savePreferences, toggleTheme, setLanguage: changeLanguage, setCurrency: changeCurrency,
       saveRoute, deleteRoute, updateRoute,
       fetchRecommendedRoutes, addRecommendedRoute, updateRecommendedRoute, deleteRecommendedRoute,
+      // Active Route Session (persists across tabs)
+      isRouteActive, isRouteTracking, routeElapsed, routeDistanceM, routePath, routePoints,
+      replicatedRoute, isVehicleDetected, currentSpeedKmh, currentPosition,
+      startRouteSession, pauseRouteSession, resumeRouteSession, discardRouteSession,
+      addRouteCheckpoint, removeRouteCheckpoint, finishRouteSession,
       login, logout, loginUser, registerUser,
       fetchAdminStats, fetchAdminUsers, createUser, fetchComercios, createComercio, updateComercio,
       deleteComercio, updateUser, deleteUser, validarBono, fetchComercioStats, updateComercioBonos,

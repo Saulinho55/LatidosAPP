@@ -505,68 +505,80 @@ const EditRouteModal = ({ route, onClose, onSave, tr }) => {
 };
 
 const RutasPage = () => {
-  const { isAuthenticated, savedRoutes, recommendedRoutes, saveRoute, deleteRoute, updateRoute, ganarLatidos, updateSteps, steps: totalSteps, tr } = useLatidos();
+  const {
+    isAuthenticated,
+    savedRoutes,
+    recommendedRoutes,
+    saveRoute,
+    deleteRoute,
+    updateRoute,
+    ganarLatidos,
+    updateSteps,
+    steps: totalSteps,
+    tr,
+    isRouteActive,
+    isRouteTracking,
+    routeElapsed,
+    routeDistanceM,
+    routePath,
+    routePoints,
+    replicatedRoute,
+    isVehicleDetected,
+    currentSpeedKmh,
+    currentPosition,
+    startRouteSession,
+    pauseRouteSession,
+    resumeRouteSession,
+    discardRouteSession,
+    addRouteCheckpoint,
+    removeRouteCheckpoint,
+    finishRouteSession
+  } = useLatidos();
+
   const navigate = useNavigate();
 
-  const {
-    position,
-    route,
-    points,
-    distanceM,
-    isTracking,
-    error,
-    permissionState,
-    startTracking,
-    stopTracking,
-    addPoint,
-    removePoint,
-    resetRoute
-  } = useGeolocation();
-
   const [activeTab, setActiveTab] = useState('recommended'); // 'recommended' | 'my_routes'
-  const [elapsed, setElapsed] = useState(0);
-  const timerRef = useRef(null);
-  const [isSessionActive, setIsSessionActive] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [showAddPointModal, setShowAddPointModal] = useState(false);
+  const [newPointName, setNewPointName] = useState('');
   const [editingRoute, setEditingRoute] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [routeName, setRouteName] = useState('');
   const [expandedRouteId, setExpandedRouteId] = useState(null);
-  const [replicatedRoute, setReplicatedRoute] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    if (isTracking) {
-      timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
-    } else {
-      clearInterval(timerRef.current);
-    }
-    return () => clearInterval(timerRef.current);
-  }, [isTracking]);
-
-  const speedKmh = elapsed > 0 ? ((distanceM / 1000) / (elapsed / 3600)) : 0;
-  const routeSteps = Math.round(distanceM * 1.312);
+  const speedKmh = currentSpeedKmh || (routeElapsed > 0 ? ((routeDistanceM / 1000) / (routeElapsed / 3600)) : 0);
+  const routeSteps = Math.round(routeDistanceM * 1.312);
   const earnedLatidos = Math.floor(routeSteps / 100);
+  const currentPos = currentPosition || { lat: 28.0048, lon: -15.4158 };
 
   const handleStartRoute = () => {
-    setIsSessionActive(true);
-    startTracking();
+    startRouteSession();
+  };
+
+  const handleOpenAddPoint = () => {
+    setNewPointName(`Punto ${(routePoints?.length || 0) + 1}`);
+    setShowAddPointModal(true);
+  };
+
+  const handleConfirmAddPoint = (e) => {
+    e?.preventDefault?.();
+    const finalPtName = newPointName.trim() || `Punto ${(routePoints?.length || 0) + 1}`;
+    addRouteCheckpoint(finalPtName, currentPos);
+    setShowAddPointModal(false);
+    setNewPointName('');
   };
 
   const handleFinish = () => {
-    stopTracking();
+    pauseRouteSession();
     const defaultName = replicatedRoute ? `Re: ${replicatedRoute.name}` : `Paseo ${new Date().toLocaleDateString('es-ES')}`;
     setRouteName(defaultName);
     setShowSaveModal(true);
   };
 
   const handleDiscardRoute = () => {
-    stopTracking();
-    resetRoute();
-    setElapsed(0);
-    setReplicatedRoute(null);
-    setIsSessionActive(false);
+    discardRouteSession();
     setShowDiscardConfirm(false);
   };
 
@@ -575,32 +587,8 @@ const RutasPage = () => {
     setIsSaving(true);
 
     try {
-      const latidosEarned = Math.floor(routeSteps / 100);
-      const finalRoute = route && route.length > 0 
-        ? route 
-        : (position ? [{ lat: position.lat, lon: position.lon }] : [{ lat: 28.0048, lon: -15.4158 }]);
-
-      await saveRoute({
-        name: (routeName && routeName.trim()) || `Paseo ${new Date().toLocaleDateString('es-ES')}`,
-        distance: (distanceM || 0) / 1000,
-        duration: elapsed || 1,
-        latidos_earned: latidosEarned,
-        path: finalRoute,
-        points: points || []
-      });
-
-      if (latidosEarned > 0) {
-        await ganarLatidos(latidosEarned);
-      }
-      if (routeSteps > 0) {
-        await updateSteps((totalSteps || 0) + routeSteps);
-      }
-
+      await finishRouteSession(routeName);
       setShowSaveModal(false);
-      setReplicatedRoute(null);
-      resetRoute();
-      setElapsed(0);
-      setIsSessionActive(false);
     } catch (err) {
       console.error('Error guardando la ruta:', err);
       alert('Hubo un error al guardar la ruta: ' + (err.message || err));
@@ -610,11 +598,7 @@ const RutasPage = () => {
   };
 
   const handleReplicar = (rt) => {
-    resetRoute();
-    setElapsed(0);
-    setReplicatedRoute(rt);
-    setIsSessionActive(true);
-    startTracking();
+    startRouteSession(rt);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -724,9 +708,6 @@ const RutasPage = () => {
     );
   }
 
-  const isRouteActive = isSessionActive || isTracking || (route && route.length > 0) || replicatedRoute !== null;
-  const currentPos = position || { lat: 28.0048, lon: -15.4158 };
-
   // Calculate sorted active checkpoints with real-time distance
   const activeCheckpoints = useMemo(() => {
     const list = [];
@@ -747,7 +728,7 @@ const RutasPage = () => {
     }
 
     // Add live points added by user
-    (points || []).forEach((p, idx) => {
+    (routePoints || []).forEach((p, idx) => {
       list.push({
         id: `live-${idx}`,
         name: p.name || `Punto ${idx + 1}`,
@@ -759,18 +740,7 @@ const RutasPage = () => {
     });
 
     return list.sort((a, b) => a.distance - b.distance);
-  }, [replicatedRoute, points, currentPos]);
-
-  // Combined safe routes list
-  const allRoutesList = useMemo(() => {
-    const list = [...(savedRoutes || [])];
-    DEFAULT_POPULAR_ROUTES.forEach(pop => {
-      if (!list.some(r => r.id === pop.id)) {
-        list.push(pop);
-      }
-    });
-    return list;
-  }, [savedRoutes]);
+  }, [replicatedRoute, routePoints, currentPos]);
 
   return (
     <div style={{ paddingBottom: '6rem', paddingTop: '0.5rem' }}>
@@ -782,13 +752,13 @@ const RutasPage = () => {
         borderRadius: '1.5rem',
         margin: '1rem 1rem 0.75rem',
         textAlign: 'left',
-        border: isTracking ? '2px solid rgba(34, 197, 94, 0.4)' : 'none',
-        boxShadow: isTracking ? '0 4px 20px rgba(34, 197, 94, 0.2)' : 'none'
+        border: isRouteTracking ? '2px solid rgba(34, 197, 94, 0.4)' : 'none',
+        boxShadow: isRouteTracking ? '0 4px 20px rgba(34, 197, 94, 0.2)' : 'none'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <p style={{ fontSize: '0.95rem', fontWeight: '400', marginBottom: '0.4rem', opacity: 0.85 }}>
-              {replicatedRoute ? `🧭 ${tr?.replicandoRuta || 'Replicando ruta'}: ${replicatedRoute.name}` : (tr?.misRutas || 'Mis Rutas')}
+              {replicatedRoute ? `Replicando ruta: ${replicatedRoute.name}` : (tr?.misRutas || 'Mis Rutas')}
             </p>
             {/* Live Distance in Green when active */}
             <div style={{
@@ -797,21 +767,21 @@ const RutasPage = () => {
               fontStyle: 'italic',
               lineHeight: '1',
               marginBottom: '0.3rem',
-              color: isTracking ? '#22c55e' : 'var(--color-header-text)',
+              color: isRouteTracking ? '#22c55e' : 'var(--color-header-text)',
               transition: 'color 0.3s ease',
-              textShadow: isTracking ? '0 0 16px rgba(34, 197, 94, 0.4)' : 'none'
+              textShadow: isRouteTracking ? '0 0 16px rgba(34, 197, 94, 0.4)' : 'none'
             }}>
-              {formatDistance(distanceM)}
+              {formatDistance(routeDistanceM)}
             </div>
-            <p style={{ fontSize: '0.95rem', opacity: 0.9, fontWeight: '600', color: isTracking ? '#86efac' : 'inherit' }}>
+            <p style={{ fontSize: '0.95rem', opacity: 0.9, fontWeight: '600', color: isRouteTracking ? '#86efac' : 'inherit' }}>
               👟 {routeSteps.toLocaleString('es-ES')} {tr?.pasos || 'pasos'}
             </p>
           </div>
 
           {/* Heart Badge with potential latidos */}
           <div style={{
-            backgroundColor: isTracking ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.18)',
-            border: isTracking ? '1.5px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(255,255,255,0.3)',
+            backgroundColor: isRouteTracking ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.18)',
+            border: isRouteTracking ? '1.5px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(255,255,255,0.3)',
             borderRadius: '1.2rem',
             padding: '0.6rem 0.9rem',
             textAlign: 'center',
@@ -822,7 +792,7 @@ const RutasPage = () => {
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
           }}>
             <span style={{ fontSize: '1.6rem', lineHeight: '1' }}>❤</span>
-            <span style={{ fontSize: '1.25rem', fontWeight: '800', marginTop: '0.2rem', color: isTracking ? '#22c55e' : 'inherit' }}>
+            <span style={{ fontSize: '1.25rem', fontWeight: '800', marginTop: '0.2rem', color: isRouteTracking ? '#22c55e' : 'inherit' }}>
               +{earnedLatidos}
             </span>
             <span style={{ fontSize: '0.68rem', opacity: 0.85, fontWeight: '600', textTransform: 'uppercase' }}>
@@ -832,7 +802,7 @@ const RutasPage = () => {
         </div>
 
         <p style={{ fontSize: '0.85rem', marginTop: '0.75rem' }}>
-          {isTracking ? (
+          {isRouteTracking ? (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#22c55e', fontWeight: '700' }}>
               <span style={{ width: '9px', height: '9px', backgroundColor: '#22c55e', borderRadius: '50%', display: 'inline-block', animation: 'pulseGreenDot 1.2s infinite' }}></span>
               {tr?.rutaGrabando || tr?.registrarRuta || 'Grabando ruta activa'}...
@@ -845,14 +815,32 @@ const RutasPage = () => {
         </p>
       </div>
 
-      {/* Live Map (Focus purely on route & green points) */}
+      {/* Vehicle Detected Warning Banner (No emojis, exact text) */}
+      {isVehicleDetected && (
+        <div style={{
+          margin: '0 1rem 0.75rem',
+          backgroundColor: '#e74c3c',
+          color: 'white',
+          padding: '0.75rem 1rem',
+          borderRadius: '1rem',
+          textAlign: 'center',
+          fontFamily: 'var(--font-main)',
+          fontWeight: '700',
+          fontSize: '0.9rem',
+          boxShadow: '0 4px 12px rgba(231, 76, 60, 0.3)'
+        }}>
+          (Vehículo detectado, pasos pausados)
+        </div>
+      )}
+
+      {/* Live Map */}
       <LiveMap
         position={currentPos}
-        route={route}
-        points={points}
+        route={routePath}
+        points={routePoints}
         targetRoute={replicatedRoute ? getSafePath(replicatedRoute) : null}
         targetPoints={replicatedRoute ? getSafePoints(replicatedRoute) : null}
-        onRemovePoint={removePoint}
+        onRemovePoint={removeRouteCheckpoint}
         tr={tr}
       />
 
@@ -861,11 +849,11 @@ const RutasPage = () => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.6rem', margin: '0 1rem 0.75rem' }}>
           <div style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '0.85rem 0.5rem', textAlign: 'center', boxShadow: 'var(--shadow-card)' }}>
             <p style={{ fontSize: '0.72rem', color: 'var(--color-detail)', marginBottom: '0.2rem' }}>⏱ {tr?.tiempo || 'Tiempo'}</p>
-            <p style={{ fontSize: '1.35rem', fontWeight: '700', fontStyle: 'italic', color: 'var(--color-text)' }}>{formatTime(elapsed)}</p>
+            <p style={{ fontSize: '1.35rem', fontWeight: '700', fontStyle: 'italic', color: 'var(--color-text)' }}>{formatTime(routeElapsed)}</p>
           </div>
-          <div style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '0.85rem 0.5rem', textAlign: 'center', boxShadow: 'var(--shadow-card)', border: isTracking ? '1.5px solid rgba(34, 197, 94, 0.3)' : 'none' }}>
-            <p style={{ fontSize: '0.72rem', color: isTracking ? '#16a34a' : 'var(--color-detail)', marginBottom: '0.2rem', fontWeight: '600' }}>👟 {tr?.pasos || 'Pasos'}</p>
-            <p style={{ fontSize: '1.35rem', fontWeight: '700', fontStyle: 'italic', color: isTracking ? '#22c55e' : 'var(--color-accent)' }}>
+          <div style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', padding: '0.85rem 0.5rem', textAlign: 'center', boxShadow: 'var(--shadow-card)', border: isRouteTracking ? '1.5px solid rgba(34, 197, 94, 0.3)' : 'none' }}>
+            <p style={{ fontSize: '0.72rem', color: isRouteTracking ? '#16a34a' : 'var(--color-detail)', marginBottom: '0.2rem', fontWeight: '600' }}>👟 {tr?.pasos || 'Pasos'}</p>
+            <p style={{ fontSize: '1.35rem', fontWeight: '700', fontStyle: 'italic', color: isRouteTracking ? '#22c55e' : 'var(--color-accent)' }}>
               {routeSteps.toLocaleString('es-ES')}
             </p>
           </div>
@@ -931,16 +919,16 @@ const RutasPage = () => {
           </button>
         ) : (
           <>
-            {isTracking ? (
+            {isRouteTracking ? (
               <div style={{ display: 'flex', gap: '0.6rem' }}>
                 <button 
-                  onClick={stopTracking} 
+                  onClick={pauseRouteSession} 
                   style={{ flex: 1, backgroundColor: '#f39c12', color: 'white', padding: '0.85rem', borderRadius: '2.5rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontSize: '0.95rem' }}
                 >
                   ⏸ {tr?.detenerRuta || tr?.detener || 'Detener'}
                 </button>
                 <button 
-                  onClick={addPoint} 
+                  onClick={handleOpenAddPoint} 
                   style={{ flex: 1, backgroundColor: '#22c55e', color: 'white', padding: '0.85rem', borderRadius: '2.5rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontSize: '0.95rem', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)' }}
                 >
                   📍 {tr?.anadirPunto || 'Añadir Punto'}
@@ -949,7 +937,7 @@ const RutasPage = () => {
             ) : (
               <div style={{ display: 'flex', gap: '0.6rem' }}>
                 <button 
-                  onClick={startTracking} 
+                  onClick={resumeRouteSession} 
                   style={{ flex: 1, backgroundColor: '#22c55e', color: 'white', padding: '0.85rem', borderRadius: '2.5rem', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontSize: '0.95rem', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)' }}
                 >
                   ▶ {tr?.reanudarRuta || tr?.reanudar || 'Reanudar'}
@@ -961,7 +949,7 @@ const RutasPage = () => {
                   🗑️ {tr?.eliminarRutaActual || 'Eliminar ruta'}
                 </button>
                 <button 
-                  onClick={addPoint} 
+                  onClick={handleOpenAddPoint} 
                   style={{ padding: '0.85rem 1rem', backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)', borderRadius: '2.5rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.9rem' }}
                 >
                   📍 {tr?.anadirPunto || 'Punto'}
@@ -978,6 +966,58 @@ const RutasPage = () => {
           </>
         )}
       </div>
+
+      {/* Modal para Añadir Punto de Interés en el momento (Requerimiento 4) */}
+      {showAddPointModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ backgroundColor: 'var(--color-card)', padding: '1.5rem', borderRadius: '1.5rem', width: '100%', maxWidth: '380px', boxShadow: '0 8px 30px rgba(0,0,0,0.3)', border: '1px solid var(--color-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <span style={{ fontSize: '1.5rem' }}>📍</span>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', color: 'var(--color-text)', margin: 0 }}>
+                Añadir Punto de Interés
+              </h3>
+            </div>
+            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', marginBottom: '1.2rem' }}>
+              Nombra este punto de control en tu ubicación GPS actual:
+            </p>
+            <form onSubmit={handleConfirmAddPoint}>
+              <input 
+                type="text"
+                autoFocus
+                value={newPointName}
+                onChange={e => setNewPointName(e.target.value)}
+                placeholder="Ej: Plaza de San Juan, Fuente..."
+                style={{
+                  width: '100%',
+                  padding: '0.85rem',
+                  borderRadius: '1rem',
+                  border: '1px solid var(--color-border)',
+                  backgroundColor: 'var(--color-input-bg)',
+                  color: 'var(--color-text)',
+                  fontSize: '0.95rem',
+                  outline: 'none',
+                  marginBottom: '1.2rem'
+                }}
+              />
+              <div style={{ display: 'flex', gap: '0.6rem' }}>
+                <button 
+                  type="button"
+                  onClick={() => setShowAddPointModal(false)}
+                  style={{ flex: 1, padding: '0.75rem', borderRadius: '2rem', border: '1px solid var(--color-border)', backgroundColor: 'transparent', color: 'var(--color-text)', fontWeight: '600', cursor: 'pointer' }}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  style={{ flex: 1, padding: '0.75rem', borderRadius: '2rem', border: 'none', backgroundColor: '#22c55e', color: 'white', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)' }}
+                >
+                  Guardar Punto
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Selector de pestañas: Rutas recomendadas / Mis rutas */}
       <div style={{ margin: '0 1rem 1rem' }}>

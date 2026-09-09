@@ -53,12 +53,15 @@ const AdminUsers = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    const payload = { ...formData };
-    if (payload.role === 'comercio') {
-      payload.latidos = 0;
-      payload.steps_today = 0;
-      payload.racha = 0;
-    }
+    const payload = {
+      name: formData.name.trim(),
+      email: formData.email.trim().toLowerCase(),
+      role: formData.role,
+      comercio_id: formData.role === 'comercio' && formData.comercio_id ? parseInt(formData.comercio_id, 10) : null,
+      latidos: formData.role === 'comercio' ? 0 : (formData.latidos === '' ? 0 : parseInt(formData.latidos, 10) || 0),
+      steps_today: formData.role === 'comercio' ? 0 : (formData.steps_today === '' ? 0 : parseInt(formData.steps_today, 10) || 0),
+      racha: formData.role === 'comercio' ? 0 : (formData.racha === '' ? 0 : parseInt(formData.racha, 10) || 0)
+    };
     const res = await updateUser(editingId, payload);
     if (res?.success) {
       setEditingId(null);
@@ -70,12 +73,16 @@ const AdminUsers = () => {
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
-    const payload = { ...newUserData };
-    if (payload.role === 'comercio') {
-      payload.latidos = 0;
-      payload.steps_today = 0;
-      payload.racha = 0;
-    }
+    const payload = {
+      name: newUserData.name.trim(),
+      email: newUserData.email.trim().toLowerCase(),
+      password: newUserData.password,
+      role: newUserData.role,
+      comercio_id: newUserData.role === 'comercio' && newUserData.comercio_id ? parseInt(newUserData.comercio_id, 10) : null,
+      latidos: newUserData.role === 'comercio' ? 0 : (newUserData.latidos === '' ? 0 : parseInt(newUserData.latidos, 10) || 0),
+      steps_today: newUserData.role === 'comercio' ? 0 : (newUserData.steps_today === '' ? 0 : parseInt(newUserData.steps_today, 10) || 0),
+      racha: newUserData.role === 'comercio' ? 0 : (newUserData.racha === '' ? 0 : parseInt(newUserData.racha, 10) || 0)
+    };
     const res = await createUser(payload);
     if (res?.success) {
       alert('Usuario creado correctamente');

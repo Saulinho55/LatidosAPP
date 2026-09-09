@@ -4,11 +4,13 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 
 // Step detection algorithm using accelerometer
-// Detects peaks in acceleration magnitude above a threshold
-const STEP_THRESHOLD = 1.2;       // g-force delta to count as a step
-const MIN_STEP_INTERVAL_MS = 250; // minimum ms between steps (prevents double-counting)
+// Detects realistic human walking cadence (300ms - 1100ms) and rejects vehicular road vibrations
+const STEP_THRESHOLD_MIN = 1.15;   // minimum g-force delta
+const STEP_THRESHOLD_MAX = 3.20;   // maximum g-force delta (car potholes / drops exceed this)
+const MIN_STEP_INTERVAL_MS = 300; // minimum ms between steps (~200 steps/min sprint limit)
+const MAX_STEP_INTERVAL_MS = 1200; // maximum ms between steps to maintain walking cadence
 
-export const useStepCounter = (initialSteps = 0) => {
+export const useStepCounter = (initialSteps = 0, options = {}) => {
   const [steps, setSteps] = useState(initialSteps);
   const [isTracking, setIsTracking] = useState(false);
   const [isSupported, setIsSupported] = useState(true);
@@ -20,6 +22,9 @@ export const useStepCounter = (initialSteps = 0) => {
   const isRising = useRef(false);
   const stepsRef = useRef(initialSteps);
   const wakeLockRef = useRef(null);
+  
+  // Rhythmic step buffer (requires 3 consecutive rhythmic steps before committing to prevent road bumps)
+  const candidateStepTimes = useRef([]);
 
   // Sync with initialSteps when it arrives from DB
   useEffect(() => {
@@ -29,31 +34,47 @@ export const useStepCounter = (initialSteps = 0) => {
     }
   }, [initialSteps]);
 
-
   const handleMotion = useCallback((event) => {
+    // If vehicle detected externally, pause step counting
+    if (options.isVehicleDetected) return;
+
     const { x, y, z } = event.accelerationIncludingGravity || {};
     if (x == null || y == null || z == null) return;
 
     const mag = Math.sqrt(x * x + y * y + z * z);
     const now = Date.now();
+    const deltaMag = mag - lastMag.current;
 
-    // Detect rising edge crossing threshold
-    if (mag > lastMag.current + STEP_THRESHOLD && !isRising.current) {
+    // Detect rising edge crossing threshold within human walking acceleration range
+    if (deltaMag > STEP_THRESHOLD_MIN && deltaMag < STEP_THRESHOLD_MAX && !isRising.current) {
       isRising.current = true;
     }
 
-    // Detect falling edge — peak passed, count step
-    if (isRising.current && mag < lastMag.current - 0.3) {
+    // Detect falling edge — peak passed, evaluate step candidate
+    if (isRising.current && mag < lastMag.current - 0.25) {
       isRising.current = false;
-      if (now - lastStepTime.current > MIN_STEP_INTERVAL_MS) {
+      const interval = now - lastStepTime.current;
+
+      // Reject road noise if too fast (engine vibration < 300ms)
+      if (interval >= MIN_STEP_INTERVAL_MS) {
+        if (interval <= MAX_STEP_INTERVAL_MS) {
+          // Cadence match: consecutive step in rhythmic window
+          candidateStepTimes.current.push(now);
+          if (candidateStepTimes.current.length >= 3) {
+            // Valid continuous walking detected!
+            stepsRef.current += (candidateStepTimes.current.length === 3 ? 3 : 1);
+            setSteps(stepsRef.current);
+          }
+        } else {
+          // Reset rhythm sequence after pause
+          candidateStepTimes.current = [now];
+        }
         lastStepTime.current = now;
-        stepsRef.current += 1;
-        setSteps(stepsRef.current);
       }
     }
 
     lastMag.current = mag;
-  }, []);
+  }, [options.isVehicleDetected]);
 
   const startTracking = useCallback(async () => {
     const isDesktopWeb = !Capacitor.isNativePlatform() && !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);

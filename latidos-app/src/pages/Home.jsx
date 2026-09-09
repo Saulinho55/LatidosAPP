@@ -11,7 +11,7 @@ import { useLatidos } from '../context/LatidosContext';
 const STEPS_PER_LATIDO = 100;
 
 const Home = () => {
-  const { user, latidos, ganarLatidos, steps: dbSteps, updateSteps, racha, weeklySteps, isAuthenticated, dailyGoal, registrarActividad, currency, tr } = useLatidos();
+  const { user, latidos, ganarLatidos, steps: dbSteps, updateSteps, racha, weeklySteps, isAuthenticated, dailyGoal, registrarActividad, currency, tr, isVehicleDetected, isRouteActive } = useLatidos();
   const {
     steps,
     isTracking,
@@ -20,9 +20,11 @@ const Home = () => {
     stopTracking,
     alertMsg,
     setAlertMsg
-  } = useStepCounter(dbSteps);
+  } = useStepCounter(dbSteps, { isVehicleDetected });
   
   const navigate = useNavigate();
+
+  const effectiveSteps = Math.max(dbSteps || 0, steps || 0);
 
   React.useEffect(() => {
     if (isAuthenticated && user?.role === 'comercio') {
@@ -38,7 +40,7 @@ const Home = () => {
     let daySteps = isAuthenticated && weeklySteps ? (weeklySteps[index] || 0) : 0;
     // For today, use today's live steps if they are higher
     if (index === todayIndex) {
-      daySteps = Math.max(daySteps, steps);
+      daySteps = Math.max(daySteps, effectiveSteps);
     }
     return { day, steps: daySteps };
   });
@@ -86,6 +88,24 @@ const Home = () => {
     <div style={{ paddingBottom: '6rem' }}>
       <Header latidos={latidos} />
 
+      {/* Vehicle Detected Warning Banner (No emojis, exact text) */}
+      {isVehicleDetected && (
+        <div style={{
+          margin: '0.8rem 1rem 0.2rem',
+          backgroundColor: '#e74c3c',
+          color: 'white',
+          padding: '0.75rem 1rem',
+          borderRadius: '1rem',
+          textAlign: 'center',
+          fontFamily: 'var(--font-main)',
+          fontWeight: '700',
+          fontSize: '0.9rem',
+          boxShadow: '0 4px 12px rgba(231, 76, 60, 0.3)'
+        }}>
+          (Vehículo detectado, pasos pausados)
+        </div>
+      )}
+
       {alertMsg && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
           <div style={{ backgroundColor: 'var(--color-card)', padding: '2rem', borderRadius: '1.5rem', width: '100%', maxWidth: '400px', textAlign: 'center' }}>
@@ -102,9 +122,9 @@ const Home = () => {
       )}
       
       <StepsCard
-        pasos={isAuthenticated ? steps : 0}
+        pasos={isAuthenticated ? effectiveSteps : 0}
         objetivo={dailyGoal || 10000}
-        isTracking={isAuthenticated && isTracking}
+        isTracking={isAuthenticated && (isTracking || isRouteActive)}
         isSupported={isSupported}
         onStart={() => isAuthenticated ? startTracking() : navigate('/login')}
         onStop={stopTracking}

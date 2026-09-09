@@ -82,7 +82,23 @@ export const supabaseService = {
 
   async registerUser(userData) {
     let payload = { ...userData };
-    payload.email = payload.email.trim().toLowerCase();
+    if (payload.email) payload.email = payload.email.trim().toLowerCase();
+    if (payload.comercio_id !== undefined) {
+      payload.comercio_id = payload.comercio_id && payload.comercio_id !== '' ? parseInt(payload.comercio_id, 10) : null;
+    }
+    if (payload.latidos !== undefined) {
+      payload.latidos = payload.latidos === '' ? 0 : (parseInt(payload.latidos, 10) || 0);
+    }
+    if (payload.steps_today !== undefined) {
+      payload.steps_today = payload.steps_today === '' ? 0 : (parseInt(payload.steps_today, 10) || 0);
+    }
+    if (payload.racha !== undefined) {
+      payload.racha = payload.racha === '' ? 0 : (parseInt(payload.racha, 10) || 0);
+    }
+    if (payload.daily_goal !== undefined) {
+      payload.daily_goal = payload.daily_goal === '' ? 10000 : (parseInt(payload.daily_goal, 10) || 10000);
+    }
+
     if (!payload.id) {
       payload.id = await getNextId('users');
     }
@@ -126,9 +142,27 @@ export const supabaseService = {
   },
 
   async updateUser(id, updates) {
+    let cleanUpdates = { ...updates };
+    if (cleanUpdates.email) cleanUpdates.email = cleanUpdates.email.trim().toLowerCase();
+    if (cleanUpdates.comercio_id !== undefined) {
+      cleanUpdates.comercio_id = cleanUpdates.comercio_id && cleanUpdates.comercio_id !== '' ? parseInt(cleanUpdates.comercio_id, 10) : null;
+    }
+    if (cleanUpdates.latidos !== undefined) {
+      cleanUpdates.latidos = cleanUpdates.latidos === '' ? 0 : (parseInt(cleanUpdates.latidos, 10) || 0);
+    }
+    if (cleanUpdates.steps_today !== undefined) {
+      cleanUpdates.steps_today = cleanUpdates.steps_today === '' ? 0 : (parseInt(cleanUpdates.steps_today, 10) || 0);
+    }
+    if (cleanUpdates.racha !== undefined) {
+      cleanUpdates.racha = cleanUpdates.racha === '' ? 0 : (parseInt(cleanUpdates.racha, 10) || 0);
+    }
+    if (cleanUpdates.daily_goal !== undefined) {
+      cleanUpdates.daily_goal = cleanUpdates.daily_goal === '' ? 10000 : (parseInt(cleanUpdates.daily_goal, 10) || 10000);
+    }
+
     const { data, error } = await supabase
       .from('users')
-      .update(updates)
+      .update(cleanUpdates)
       .eq('id', id)
       .select()
       .maybeSingle();
@@ -400,32 +434,50 @@ export const supabaseService = {
     return data;
   },
 
-  async validateBono(code, comercioId, importe) {
+  async getTransactionByCode(code) {
+    let cleanCode = (code || '').trim().toUpperCase();
+    if (!cleanCode.startsWith('LAT-') && /^\d+$/.test(cleanCode)) {
+      cleanCode = `LAT-${cleanCode}`;
+    }
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .ilike('code', cleanCode)
+      .order('id', { ascending: false })
+      .limit(1);
+
+    if (error || !data || data.length === 0) return null;
+    return data[0];
+  },
+
+  async validateBono(code, comercioId, importe, isAdmin = false) {
     let cleanCode = (code || '').trim().toUpperCase();
     if (!cleanCode.startsWith('LAT-') && /^\d+$/.test(cleanCode)) {
       cleanCode = `LAT-${cleanCode}`;
     }
 
-    // 1. Get Comercio
-    const { data: comercio } = await supabase
-      .from('comercios')
-      .select('*')
-      .eq('id', comercioId)
-      .maybeSingle();
+    let comercio = null;
+    if (comercioId) {
+      const { data } = await supabase
+        .from('comercios')
+        .select('*')
+        .eq('id', comercioId)
+        .maybeSingle();
+      comercio = data;
+    }
 
-    if (!comercio) throw new Error('Comercio no encontrado');
-
-    // 2. Special handling for demo test code LAT-2024
+    // Special handling for demo test code LAT-2024
     if (cleanCode === 'LAT-2024') {
+      const comNombre = comercio?.nombre || 'Frutería La Majorera';
       const nextId = await getNextId('transactions');
       const payload = {
         id: nextId,
         user_id: 1,
-        comercio_nombre: comercio.nombre,
-        comercio_emoji: comercio.emoji || '🏪',
+        comercio_nombre: comNombre,
+        comercio_emoji: comercio?.emoji || '🏪',
         code: 'LAT-2024',
         latidos_usados: 100,
-        descuento: parseFloat(comercio.descuento) || 2,
+        descuento: parseFloat(comercio?.descuento) || 2,
         importe_compra: parseFloat(importe) || 0,
         fecha: new Date().toISOString()
       };
@@ -435,7 +487,7 @@ export const supabaseService = {
       return payload;
     }
 
-    // 3. Search transaction by code (case-insensitive)
+    // Search transaction by code (case-insensitive)
     const { data: txList, error: txErr } = await supabase
       .from('transactions')
       .select('*')
@@ -446,14 +498,19 @@ export const supabaseService = {
       throw new Error(`Código "${cleanCode}" no encontrado. Asegúrate de que el cliente haya generado el código.`);
     }
 
+    const tx = txList[0];
+
     // Normalize strings for robust matching
     const normalize = (str) => (str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-    const comNorm = normalize(comercio.nombre);
-
-    const tx = txList.find(t => normalize(t.comercio_nombre) === comNorm) || txList[0];
-
-    if (normalize(tx.comercio_nombre) !== comNorm) {
-      throw new Error(`Este código pertenece a "${tx.comercio_nombre}", no a "${comercio.nombre}".`);
+    
+    if (comercio && !isAdmin) {
+      const comNorm = normalize(comercio.nombre);
+      const txNorm = normalize(tx.comercio_nombre);
+      
+      const isMatch = txNorm === comNorm || txNorm.includes(comNorm) || comNorm.includes(txNorm);
+      if (!isMatch) {
+        throw new Error(`Este código pertenece a "${tx.comercio_nombre}", no a "${comercio.nombre}".`);
+      }
     }
 
     // Check if already validated with purchase amount
@@ -461,7 +518,7 @@ export const supabaseService = {
       throw new Error(`Este código ya fue validado anteriormente (Compra registrada: ${tx.importe_compra} €).`);
     }
 
-    // 4. Update transaction with purchase amount
+    // Update transaction with purchase amount
     const parsedImporte = parseFloat(importe) || 0;
 
     const { data: updated, error: updateErr } = await supabase
