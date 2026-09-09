@@ -364,7 +364,7 @@ export const LatidosProvider = ({ children }) => {
     let alreadyValidated = false;
     try {
       const dbTx = await supabaseService.getTransactionByCode(code);
-      if (dbTx && dbTx.importe_compra && parseFloat(dbTx.importe_compra) > 0) {
+      if (dbTx && dbTx.importe_compra && parseFloat(dbTx.importe_compra) > 0 && dbTx.latidos_usados > 0) {
         alreadyValidated = true;
       }
     } catch (e) {
@@ -380,6 +380,13 @@ export const LatidosProvider = ({ children }) => {
         isRefundingRef.current = false;
       }, 500);
       return;
+    }
+
+    // Cancel in Supabase so merchant's screen updates immediately
+    try {
+      await supabaseService.rechazarBono(code);
+    } catch (e) {
+      console.error('Error cancelling bono in Supabase:', e);
     }
 
     if (refundAmount > 0 && currentUid) {
@@ -407,7 +414,7 @@ export const LatidosProvider = ({ children }) => {
     }, 500);
   };
 
-  // Instant Real-time WebSocket + 1-second fallback poll for coupon validation
+  // Instant Real-time WebSocket + 500ms fallback poll for coupon validation
   useEffect(() => {
     if (!activeCode || !activeCode.code) return;
 
@@ -430,7 +437,7 @@ export const LatidosProvider = ({ children }) => {
 
         if (currentUid) {
           supabaseService.getUserById(currentUid).then(u => {
-            if (u && isMounted) setLatidos(u.latidos || 0);
+            if (u && isMounted && typeof u.latidos === 'number') setLatidos(u.latidos);
           }).catch(console.error);
           supabaseService.getTransactions(currentUid)
             .then(txs => { if (isMounted) setTransactions(txs); })

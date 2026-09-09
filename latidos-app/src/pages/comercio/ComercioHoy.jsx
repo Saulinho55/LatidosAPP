@@ -1,6 +1,34 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLatidos } from '../../context/LatidosContext';
+import { supabase } from '../../lib/supabase';
+
+const PendingCountdown = ({ fecha }) => {
+  const [timeLeft, setTimeLeft] = useState(() => {
+    if (!fecha) return '10:00';
+    const elapsed = Date.now() - new Date(fecha).getTime();
+    const remaining = Math.max(0, Math.floor((10 * 60 * 1000 - elapsed) / 1000));
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  });
+
+  useEffect(() => {
+    if (!fecha) return;
+    const update = () => {
+      const elapsed = Date.now() - new Date(fecha).getTime();
+      const remaining = Math.max(0, Math.floor((10 * 60 * 1000 - elapsed) / 1000));
+      const m = Math.floor(remaining / 60);
+      const s = remaining % 60;
+      setTimeLeft(`${m}:${s.toString().padStart(2, '0')}`);
+    };
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [fecha]);
+
+  return <span style={{ opacity: 0.9, fontWeight: '700' }}>({timeLeft})</span>;
+};
 
 const ComercioHoy = () => {
   const navigate = useNavigate();
@@ -73,9 +101,29 @@ const ComercioHoy = () => {
 
   useEffect(() => {
     loadStats();
-    // Auto refresh every 4 seconds to catch new incoming codes in real time
-    const timer = setInterval(() => loadStats(false), 4000);
-    return () => clearInterval(timer);
+    
+    // 1. Instant Supabase Realtime channel
+    const channel = supabase
+      .channel(`comercio-hoy-${Date.now()}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'transactions'
+        },
+        () => {
+          loadStats(false);
+        }
+      )
+      .subscribe();
+
+    // 2. High-frequency 2-second fallback poll
+    const timer = setInterval(() => loadStats(false), 2000);
+    return () => {
+      clearInterval(timer);
+      supabase.removeChannel(channel);
+    };
   }, [loadStats]);
 
   const handleRechazar = async (tx) => {
