@@ -33,13 +33,15 @@ const ComercioHoy = () => {
           return d.toLocaleDateString('es-ES') === todayStr;
         });
         
-        const gastoHoy = todayTxs.reduce((sum, t) => sum + (parseFloat(t.importe_compra) > 0 ? parseFloat(t.importe_compra) : 0), 0);
-        const bonosValidados = todayTxs.filter(t => t.importe_compra && parseFloat(t.importe_compra) > 0).length;
+        // Strictly count validated completed transactions
+        const validatedTxsToday = todayTxs.filter(t => t.importe_compra && parseFloat(t.importe_compra) > 0 && t.latidos_usados > 0);
+        const gastoHoy = validatedTxsToday.reduce((sum, t) => sum + (parseFloat(t.importe_compra) || 0), 0);
+        const bonosValidados = validatedTxsToday.length;
         
-        // Calculate new clients
+        // Calculate new clients based ONLY on completed validated transactions
         const userTxsMap = {};
         data.transactions.forEach(t => {
-          if (t.user_id && t.importe_compra && parseFloat(t.importe_compra) > 0) {
+          if (t.user_id && t.importe_compra && parseFloat(t.importe_compra) > 0 && t.latidos_usados > 0) {
             if (!userTxsMap[t.user_id]) userTxsMap[t.user_id] = [];
             userTxsMap[t.user_id].push(new Date(t.fecha).toLocaleDateString('es-ES'));
           }
@@ -100,8 +102,8 @@ const ComercioHoy = () => {
   // Filter out expired and cancelled bonos by default
   const displayedTxs = stats.recentTxs.filter(tx => {
     if (showAllHistory) return true;
-    const isValidated = tx.importe_compra && parseFloat(tx.importe_compra) > 0;
-    const isCancelled = tx.importe_compra === -1 || (typeof tx.descuento === 'string' && tx.descuento.includes('Cancelado'));
+    const isValidated = tx.importe_compra && parseFloat(tx.importe_compra) > 0 && tx.latidos_usados > 0;
+    const isCancelled = tx.latidos_usados === 0 || tx.importe_compra === 0 || tx.importe_compra === -1 || (typeof tx.descuento === 'string' && tx.descuento.includes('Cancelado'));
     const isExpired = !isValidated && !isCancelled && tx.fecha && (now - new Date(tx.fecha).getTime() > TEN_MINUTES_MS);
 
     // If pending, only show if NOT expired and NOT cancelled
@@ -251,8 +253,8 @@ const ComercioHoy = () => {
               </thead>
               <tbody>
                 {displayedTxs.map(tx => {
-                  const isValidated = tx.importe_compra && parseFloat(tx.importe_compra) > 0;
-                  const isCancelled = tx.importe_compra === -1 || (typeof tx.descuento === 'string' && tx.descuento.includes('Cancelado'));
+                  const isValidated = tx.importe_compra && parseFloat(tx.importe_compra) > 0 && tx.latidos_usados > 0;
+                  const isCancelled = tx.latidos_usados === 0 || tx.importe_compra === 0 || tx.importe_compra === -1 || (typeof tx.descuento === 'string' && tx.descuento.includes('Cancelado'));
                   const isExpired = !isValidated && !isCancelled && tx.fecha && (now - new Date(tx.fecha).getTime() > TEN_MINUTES_MS);
                   const isPending = !isValidated && !isCancelled && !isExpired;
 

@@ -418,16 +418,20 @@ export const LatidosProvider = ({ children }) => {
       if (!isMounted) return;
       if (!tx) return;
 
-      // Case 1: Validated by merchant (> 0 €)
-      if ((tx.importe_compra && parseFloat(tx.importe_compra) > 0) || tx.estado === 'validated') {
+      const currentUid = userId || user?.id || parseInt(localStorage.getItem('latidos_user_id'), 10);
+
+      // Case 1: Validated by merchant (> 0 € purchase and > 0 latidos)
+      if (tx.importe_compra && parseFloat(tx.importe_compra) > 0 && tx.latidos_usados > 0) {
         setActiveCode(null);
         localStorage.removeItem('latidos_active_code');
         const shopName = tx.comercio_nombre || activeCode.comercioNombre || 'el comercio';
-        const amountStr = tx.importe_compra ? ` (${parseFloat(tx.importe_compra).toFixed(2)} € registrado)` : '';
+        const amountStr = ` (${parseFloat(tx.importe_compra).toFixed(2)} € registrado)`;
         setActiveCodeNotification(`¡Bono validado y canjeado al instante en ${shopName}!${amountStr}`);
 
-        const currentUid = userId || user?.id || parseInt(localStorage.getItem('latidos_user_id'), 10);
         if (currentUid) {
+          supabaseService.getUserById(currentUid).then(u => {
+            if (u && isMounted) setLatidos(u.latidos || 0);
+          }).catch(console.error);
           supabaseService.getTransactions(currentUid)
             .then(txs => { if (isMounted) setTransactions(txs); })
             .catch(console.error);
@@ -435,20 +439,19 @@ export const LatidosProvider = ({ children }) => {
         return;
       }
 
-      // Case 2: Rejected / Cancelled by merchant (-1 €)
-      if (tx.importe_compra === -1 || (tx.importe_compra && parseFloat(tx.importe_compra) < 0)) {
+      // Case 2: Rejected / Cancelled by merchant (latidos_usados === 0 || importe_compra === 0 || importe_compra === -1)
+      if (tx.latidos_usados === 0 || tx.importe_compra === 0 || tx.importe_compra === -1 || (typeof tx.descuento === 'string' && tx.descuento.includes('Cancelado'))) {
         setActiveCode(null);
         localStorage.removeItem('latidos_active_code');
         const shopName = tx.comercio_nombre || activeCode.comercioNombre || 'el comercio';
-        const refundPts = activeCode.latidosUsados || tx.latidos_usados || 0;
+        const refundPts = activeCode.latidosUsados || 0;
 
-        if (refundPts > 0) {
-          setLatidos(prev => prev + refundPts);
-        }
-        setActiveCodeNotification(`Bono cancelado por ${shopName}. Se te han devuelto ${refundPts} Latidos.`);
+        setActiveCodeNotification(`Bono ${cleanCode} cancelado por ${shopName}. Se te han devuelto ${refundPts} Latidos.`);
 
-        const currentUid = userId || user?.id || parseInt(localStorage.getItem('latidos_user_id'), 10);
         if (currentUid) {
+          supabaseService.getUserById(currentUid).then(u => {
+            if (u && isMounted) setLatidos(u.latidos || 0);
+          }).catch(console.error);
           supabaseService.getTransactions(currentUid)
             .then(txs => { if (isMounted) setTransactions(txs); })
             .catch(console.error);
@@ -480,7 +483,7 @@ export const LatidosProvider = ({ children }) => {
       if (tx && isMounted) handleValidatedTx(tx);
     }).catch(() => {});
 
-    // 3. Fast 1-second fallback poll
+    // 3. Ultra-fast 500ms fallback poll
     const pollInterval = setInterval(async () => {
       try {
         const dbTx = await supabaseService.getTransactionByCode(cleanCode);
@@ -488,7 +491,7 @@ export const LatidosProvider = ({ children }) => {
           handleValidatedTx(dbTx);
         }
       } catch (err) {}
-    }, 1000);
+    }, 500);
 
     return () => {
       isMounted = false;
@@ -1050,6 +1053,21 @@ export const LatidosProvider = ({ children }) => {
           }
         }
       } catch (e) {}
+
+      // Refresh current user's data from DB immediately
+      const currentUid = userId || user?.id || parseInt(localStorage.getItem('latidos_user_id'), 10);
+      if (currentUid) {
+        try {
+          const freshUser = await supabaseService.getUserById(currentUid);
+          if (freshUser) {
+            setLatidos(freshUser.latidos || 0);
+          }
+          const freshTxs = await supabaseService.getTransactions(currentUid);
+          if (freshTxs) {
+            setTransactions(freshTxs);
+          }
+        } catch (err) {}
+      }
 
       return { success: true, data: updatedTx };
     } catch (e) {
