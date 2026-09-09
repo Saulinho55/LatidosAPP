@@ -416,12 +416,36 @@ export const LatidosProvider = ({ children }) => {
 
     const handleValidatedTx = (tx) => {
       if (!isMounted) return;
-      if (tx && ((tx.importe_compra && parseFloat(tx.importe_compra) > 0) || tx.estado === 'validated')) {
+      if (!tx) return;
+
+      // Case 1: Validated by merchant (> 0 €)
+      if ((tx.importe_compra && parseFloat(tx.importe_compra) > 0) || tx.estado === 'validated') {
         setActiveCode(null);
         localStorage.removeItem('latidos_active_code');
         const shopName = tx.comercio_nombre || activeCode.comercioNombre || 'el comercio';
         const amountStr = tx.importe_compra ? ` (${parseFloat(tx.importe_compra).toFixed(2)} € registrado)` : '';
         setActiveCodeNotification(`¡Bono validado y canjeado al instante en ${shopName}!${amountStr}`);
+
+        const currentUid = userId || user?.id || parseInt(localStorage.getItem('latidos_user_id'), 10);
+        if (currentUid) {
+          supabaseService.getTransactions(currentUid)
+            .then(txs => { if (isMounted) setTransactions(txs); })
+            .catch(console.error);
+        }
+        return;
+      }
+
+      // Case 2: Rejected / Cancelled by merchant (-1 €)
+      if (tx.importe_compra === -1 || (tx.importe_compra && parseFloat(tx.importe_compra) < 0)) {
+        setActiveCode(null);
+        localStorage.removeItem('latidos_active_code');
+        const shopName = tx.comercio_nombre || activeCode.comercioNombre || 'el comercio';
+        const refundPts = activeCode.latidosUsados || tx.latidos_usados || 0;
+
+        if (refundPts > 0) {
+          setLatidos(prev => prev + refundPts);
+        }
+        setActiveCodeNotification(`Bono cancelado por ${shopName}. Se te han devuelto ${refundPts} Latidos.`);
 
         const currentUid = userId || user?.id || parseInt(localStorage.getItem('latidos_user_id'), 10);
         if (currentUid) {
@@ -1010,6 +1034,29 @@ export const LatidosProvider = ({ children }) => {
     }
   };
 
+  const rechazarBono = async (txIdOrCode) => {
+    try {
+      const updatedTx = await supabaseService.rechazarBono(txIdOrCode);
+
+      // If activeCode matches this rejected code, clear it locally
+      try {
+        const cleanCode = (typeof txIdOrCode === 'string' ? txIdOrCode : '').trim().toUpperCase();
+        const saved = localStorage.getItem('latidos_active_code');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && (parsed.code === cleanCode || parsed.code === `LAT-${cleanCode}` || parsed.txId === txIdOrCode)) {
+            setActiveCode(null);
+            localStorage.removeItem('latidos_active_code');
+          }
+        }
+      } catch (e) {}
+
+      return { success: true, data: updatedTx };
+    } catch (e) {
+      return { success: false, error: e.message || 'Error al rechazar el bono' };
+    }
+  };
+
   const fetchComercioStats = async () => {
     try {
       const cList = await supabaseService.getComercios();
@@ -1109,7 +1156,7 @@ export const LatidosProvider = ({ children }) => {
       addRouteCheckpoint, removeRouteCheckpoint, finishRouteSession,
       login, logout, loginUser, registerUser,
       fetchAdminStats, fetchAdminUsers, createUser, fetchComercios, createComercio, updateComercio,
-      deleteComercio, updateUser, deleteUser, validarBono, fetchComercioStats, updateComercioBonos,
+      deleteComercio, updateUser, deleteUser, validarBono, rechazarBono, fetchComercioStats, updateComercioBonos,
       updateComercioHorarios, updateComercioProductos,
       registrarActividad
     }}>

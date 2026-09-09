@@ -534,6 +534,66 @@ export const supabaseService = {
     return updated || { ...tx, importe_compra: parsedImporte };
   },
 
+  async rechazarBono(txIdOrCode) {
+    let tx = null;
+    if (typeof txIdOrCode === 'number' || /^\d+$/.test(String(txIdOrCode))) {
+      const { data } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('id', parseInt(txIdOrCode, 10))
+        .maybeSingle();
+      tx = data;
+    } else {
+      let cleanCode = (txIdOrCode || '').trim().toUpperCase();
+      if (!cleanCode.startsWith('LAT-') && /^\d+$/.test(cleanCode)) {
+        cleanCode = `LAT-${cleanCode}`;
+      }
+      const { data } = await supabase
+        .from('transactions')
+        .select('*')
+        .ilike('code', cleanCode)
+        .order('id', { ascending: false })
+        .limit(1);
+      if (data && data.length > 0) tx = data[0];
+    }
+
+    if (!tx) throw new Error('Bono no encontrado');
+    if (tx.importe_compra && parseFloat(tx.importe_compra) > 0) {
+      throw new Error('Este bono ya fue validado y no se puede rechazar.');
+    }
+
+    // Mark as rejected / cancelled in Supabase (importe_compra = -1)
+    const { data: updated, error: updateErr } = await supabase
+      .from('transactions')
+      .update({
+        importe_compra: -1
+      })
+      .eq('id', tx.id)
+      .select()
+      .maybeSingle();
+
+    if (updateErr) throw updateErr;
+
+    // Refund latidos to the customer in Supabase
+    if (tx.user_id && tx.latidos_usados > 0) {
+      const { data: customer } = await supabase
+        .from('users')
+        .select('latidos')
+        .eq('id', tx.user_id)
+        .maybeSingle();
+
+      if (customer) {
+        const nextLatidos = (customer.latidos || 0) + tx.latidos_usados;
+        await supabase
+          .from('users')
+          .update({ latidos: nextLatidos })
+          .eq('id', tx.user_id);
+      }
+    }
+
+    return updated || { ...tx, importe_compra: -1 };
+  },
+
   // ── Routes ──
   async getRoutes(userId) {
     const { data, error } = await supabase

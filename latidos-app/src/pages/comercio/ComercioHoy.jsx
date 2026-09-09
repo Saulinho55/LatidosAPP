@@ -4,7 +4,7 @@ import { useLatidos } from '../../context/LatidosContext';
 
 const ComercioHoy = () => {
   const navigate = useNavigate();
-  const { fetchComercioStats, user } = useLatidos();
+  const { fetchComercioStats, user, rechazarBono } = useLatidos();
   
   const [stats, setStats] = useState({
     clientesHoy: 0,
@@ -16,6 +16,8 @@ const ComercioHoy = () => {
   });
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const [rejectingId, setRejectingId] = useState(null);
 
   const loadStats = useCallback(async (isManual = false) => {
     if (isManual) setIsRefreshing(true);
@@ -31,13 +33,13 @@ const ComercioHoy = () => {
           return d.toLocaleDateString('es-ES') === todayStr;
         });
         
-        const gastoHoy = todayTxs.reduce((sum, t) => sum + (parseFloat(t.importe_compra) || 0), 0);
+        const gastoHoy = todayTxs.reduce((sum, t) => sum + (parseFloat(t.importe_compra) > 0 ? parseFloat(t.importe_compra) : 0), 0);
         const bonosValidados = todayTxs.filter(t => t.importe_compra && parseFloat(t.importe_compra) > 0).length;
         
         // Calculate new clients
         const userTxsMap = {};
         data.transactions.forEach(t => {
-          if (t.user_id) {
+          if (t.user_id && t.importe_compra && parseFloat(t.importe_compra) > 0) {
             if (!userTxsMap[t.user_id]) userTxsMap[t.user_id] = [];
             userTxsMap[t.user_id].push(new Date(t.fecha).toLocaleDateString('es-ES'));
           }
@@ -51,11 +53,11 @@ const ComercioHoy = () => {
         });
 
         setStats({
-          clientesHoy: todayTxs.length,
+          clientesHoy: bonosValidados,
           gastoHoy: gastoHoy.toFixed(2).replace('.', ','),
-          bonosHoy: bonosValidados || todayTxs.length,
+          bonosHoy: bonosValidados,
           clientesNuevos: clientesNuevos,
-          recentTxs: [...data.transactions].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 20),
+          recentTxs: [...data.transactions].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)),
           comercioNombre: data.comercio?.nombre || user?.name || 'Mi Comercio'
         });
       }
@@ -73,6 +75,42 @@ const ComercioHoy = () => {
     const timer = setInterval(() => loadStats(false), 4000);
     return () => clearInterval(timer);
   }, [loadStats]);
+
+  const handleRechazar = async (tx) => {
+    if (window.confirm(`¿Rechazar el código ${tx.code}? Se devolverán los ${tx.latidos_usados || 0} Latidos al cliente y se cancelará el bono.`)) {
+      setRejectingId(tx.id);
+      try {
+        const res = await rechazarBono(tx.id || tx.code);
+        if (res.success) {
+          await loadStats(true);
+        } else {
+          alert(res.error || 'Error al rechazar el bono');
+        }
+      } catch (err) {
+        alert(err.message || 'Error al conectar');
+      } finally {
+        setRejectingId(null);
+      }
+    }
+  };
+
+  const now = Date.now();
+  const TEN_MINUTES_MS = 10 * 60 * 1000;
+
+  // Filter out expired and cancelled bonos by default
+  const displayedTxs = stats.recentTxs.filter(tx => {
+    if (showAllHistory) return true;
+    const isValidated = tx.importe_compra && parseFloat(tx.importe_compra) > 0;
+    const isCancelled = tx.importe_compra === -1 || (typeof tx.descuento === 'string' && tx.descuento.includes('Cancelado'));
+    const isExpired = !isValidated && !isCancelled && tx.fecha && (now - new Date(tx.fecha).getTime() > TEN_MINUTES_MS);
+
+    // If pending, only show if NOT expired and NOT cancelled
+    if (!isValidated) {
+      return !isExpired && !isCancelled;
+    }
+    // If validated, show it
+    return true;
+  }).slice(0, 25);
 
   const StatBox = ({ title, value, icon }) => (
     <div style={{
@@ -154,31 +192,49 @@ const ComercioHoy = () => {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.8rem', marginBottom: '1.8rem' }}>
         <StatBox title="Clientes vía LATIDOS" value={stats.clientesHoy} icon="👥" />
         <StatBox title="Gasto generado" value={`${stats.gastoHoy} €`} icon="💶" />
-        <StatBox title="Bonos procesados" value={stats.bonosHoy} icon="🎁" />
+        <StatBox title="Bonos validados" value={stats.bonosHoy} icon="🎁" />
         <StatBox title="Clientes nuevos" value={stats.clientesNuevos} icon="⭐" />
       </div>
 
       {/* Historial de canjes */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem', flexWrap: 'wrap', gap: '0.5rem' }}>
         <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', color: 'var(--color-text)', margin: 0, fontWeight: '700' }}>
-          Últimos canjes recibidos
+          Canjes y Bonos
         </h3>
-        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: '600' }}>
-          Total: {stats.recentTxs.length}
-        </span>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <button
+            onClick={() => setShowAllHistory(!showAllHistory)}
+            style={{
+              background: 'transparent',
+              border: '1px dashed var(--color-border)',
+              color: 'var(--color-text-muted)',
+              padding: '0.3rem 0.7rem',
+              borderRadius: '1rem',
+              fontSize: '0.75rem',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}
+          >
+            {showAllHistory ? '👁️ Ocultar caducados' : '📜 Ver historial completo'}
+          </button>
+          <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: '600' }}>
+            ({displayedTxs.length})
+          </span>
+        </div>
       </div>
 
       <div style={{ backgroundColor: 'var(--color-card)', borderRadius: '1.2rem', overflow: 'hidden', boxShadow: 'var(--shadow-card)', border: '1px solid var(--color-border)' }}>
         {loading ? (
           <p style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-muted)', margin: 0 }}>Cargando canjes...</p>
-        ) : stats.recentTxs.length === 0 ? (
+        ) : displayedTxs.length === 0 ? (
           <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center' }}>
             <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '0.5rem' }}>🎟️</span>
             <p style={{ margin: 0, fontFamily: 'var(--font-main)', color: 'var(--color-text)', fontWeight: '600', fontSize: '0.95rem' }}>
-              No hay canjes registrados aún.
+              No hay canjes activos o pendientes en este momento.
             </p>
             <p style={{ margin: '0.3rem 0 0', color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
-              Cuando un cliente canjee un bono en tu tienda, aparecerá aquí en tiempo real.
+              Los códigos activos generados por los vecinos aparecerán aquí al instante. Los caducados se ocultan automáticamente.
             </p>
           </div>
         ) : (
@@ -194,12 +250,14 @@ const ComercioHoy = () => {
                 </tr>
               </thead>
               <tbody>
-                {stats.recentTxs.map(tx => {
+                {displayedTxs.map(tx => {
                   const isValidated = tx.importe_compra && parseFloat(tx.importe_compra) > 0;
-                  const isCancelled = tx.descuento && typeof tx.descuento === 'string' && (tx.descuento.includes('Cancelado') || tx.descuento.includes('Caducado'));
+                  const isCancelled = tx.importe_compra === -1 || (typeof tx.descuento === 'string' && tx.descuento.includes('Cancelado'));
+                  const isExpired = !isValidated && !isCancelled && tx.fecha && (now - new Date(tx.fecha).getTime() > TEN_MINUTES_MS);
+                  const isPending = !isValidated && !isCancelled && !isExpired;
 
                   return (
-                    <tr key={tx.id} style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-card)' }}>
+                    <tr key={tx.id} style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: isPending ? 'rgba(245, 158, 11, 0.04)' : 'var(--color-card)' }}>
                       <td style={{ padding: '0.9rem 1rem', color: 'var(--color-text)', whiteSpace: 'nowrap' }}>
                         {new Date(tx.fecha).toLocaleDateString('es-ES')} <span style={{ opacity: 0.6, fontSize: '0.75rem' }}>{new Date(tx.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </td>
@@ -218,6 +276,10 @@ const ComercioHoy = () => {
                           <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#dc2626', padding: '0.3rem 0.65rem', borderRadius: '1rem', fontWeight: '700', fontSize: '0.78rem' }}>
                             ✕ Cancelado
                           </span>
+                        ) : isExpired ? (
+                          <span style={{ backgroundColor: 'rgba(156, 163, 175, 0.15)', color: '#6b7280', padding: '0.3rem 0.65rem', borderRadius: '1rem', fontWeight: '600', fontSize: '0.78rem' }}>
+                            ⏰ Caducado
+                          </span>
                         ) : (
                           <span style={{ backgroundColor: 'rgba(245, 158, 11, 0.18)', color: '#d97706', padding: '0.3rem 0.65rem', borderRadius: '1rem', fontWeight: '800', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
                             ⏳ Esperando validar
@@ -225,22 +287,47 @@ const ComercioHoy = () => {
                         )}
                       </td>
                       <td style={{ padding: '0.9rem 1rem', textAlign: 'right' }}>
-                        {!isValidated && !isCancelled && (
-                          <button
-                            onClick={() => navigate(`/comercio/validar?code=${tx.code}`)}
-                            style={{
-                              backgroundColor: 'var(--color-accent)',
-                              color: '#fff',
-                              border: 'none',
-                              padding: '0.35rem 0.75rem',
-                              borderRadius: '0.8rem',
-                              fontSize: '0.78rem',
-                              fontWeight: '700',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Validar →
-                          </button>
+                        {isPending && (
+                          <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                            <button
+                              onClick={() => navigate(`/comercio/validar?code=${tx.code}`)}
+                              style={{
+                                backgroundColor: 'var(--color-accent)',
+                                color: '#fff',
+                                border: 'none',
+                                padding: '0.35rem 0.75rem',
+                                borderRadius: '0.8rem',
+                                fontSize: '0.78rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.2rem'
+                              }}
+                            >
+                              ✓ Validar
+                            </button>
+                            <button
+                              disabled={rejectingId === tx.id}
+                              onClick={() => handleRechazar(tx)}
+                              title="Rechazar y devolver Latidos al cliente"
+                              style={{
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                color: '#dc2626',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                padding: '0.35rem 0.65rem',
+                                borderRadius: '0.8rem',
+                                fontSize: '0.78rem',
+                                fontWeight: '700',
+                                cursor: rejectingId === tx.id ? 'not-allowed' : 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.2rem'
+                              }}
+                            >
+                              {rejectingId === tx.id ? '...' : '✕ Rechazar'}
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
