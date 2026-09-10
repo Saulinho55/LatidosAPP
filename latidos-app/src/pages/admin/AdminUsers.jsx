@@ -8,6 +8,7 @@ const AdminUsers = () => {
   const [editingId, setEditingId] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState({});
+  const [showAdminPass, setShowAdminPass] = useState(false);
   const [newUserData, setNewUserData] = useState({
     name: '',
     email: '',
@@ -73,10 +74,14 @@ const AdminUsers = () => {
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
+    if (newUserData.password && (newUserData.password.length < 7 || newUserData.password.length > 22)) {
+      alert('La contraseña debe tener entre 7 y 22 caracteres.');
+      return;
+    }
     const payload = {
       name: newUserData.name.trim(),
       email: newUserData.email.trim().toLowerCase(),
-      password: newUserData.password,
+      password: newUserData.password || 'demo123',
       role: newUserData.role,
       comercio_id: newUserData.role === 'comercio' && newUserData.comercio_id ? parseInt(newUserData.comercio_id, 10) : null,
       latidos: newUserData.role === 'comercio' ? 0 : (newUserData.latidos === '' ? 0 : parseInt(newUserData.latidos, 10) || 0),
@@ -199,14 +204,49 @@ const AdminUsers = () => {
               />
             </div>
             <div>
-              <label style={labelStyle}>Contraseña inicial</label>
-              <input
-                type="password"
-                placeholder="Por defecto: demo123"
-                value={newUserData.password}
-                onChange={e => setNewUserData({...newUserData, password: e.target.value})}
-                style={inputStyle}
-              />
+              <label style={labelStyle}>Contraseña inicial (7 a 22 caracteres)</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showAdminPass ? 'text' : 'password'}
+                  placeholder="Por defecto: demo123 (7-22 car.)"
+                  minLength={7}
+                  maxLength={22}
+                  value={newUserData.password}
+                  onChange={e => setNewUserData({...newUserData, password: e.target.value})}
+                  style={{ ...inputStyle, paddingRight: '2.5rem' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPass(!showAdminPass)}
+                  title={showAdminPass ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  style={{
+                    position: 'absolute',
+                    right: '0.6rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--color-text-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0.2rem',
+                    opacity: 0.8
+                  }}
+                >
+                  {showAdminPass ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                      <line x1="1" y1="1" x2="23" y2="23"></line>
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
             <div>
               <label style={labelStyle}>Rol del usuario *</label>

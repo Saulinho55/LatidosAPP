@@ -15,6 +15,7 @@ const Login = () => {
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [captchaVerified, setCaptchaVerified] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -39,6 +40,10 @@ const Login = () => {
     if (isRegistering) {
       if (!nombre.trim() || !email.trim() || !password) {
         setError('Por favor, rellena todos los campos.');
+        return;
+      }
+      if (password.length < 7 || password.length > 22) {
+        setError('La contraseña debe tener entre 7 y 22 caracteres.');
         return;
       }
       if (!termsAccepted) {
@@ -71,6 +76,7 @@ const Login = () => {
   const toggleTab = () => {
     setIsRegistering(!isRegistering);
     setError('');
+    setShowPassword(false);
     setCaptchaVerified(false);
   };
 
@@ -167,14 +173,82 @@ const Login = () => {
           required
         />
         
-        <input 
-          type="password" 
-          placeholder="Contraseña" 
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={InputStyle}
-          required
-        />
+        <div style={{ position: 'relative', width: '100%', marginBottom: isRegistering ? '0.4rem' : '0.9rem' }}>
+          <input 
+            type={showPassword ? 'text' : 'password'} 
+            placeholder={isRegistering ? 'Contraseña (7 a 22 caracteres)' : 'Contraseña'} 
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            minLength={7}
+            maxLength={22}
+            autoComplete={isRegistering ? 'new-password' : 'current-password'}
+            style={{ ...InputStyle, marginBottom: 0, paddingRight: '2.9rem' }}
+            required
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            aria-label={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+            title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+            style={{
+              position: 'absolute',
+              right: '0.8rem',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '0.35rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--color-text-muted)',
+              opacity: 0.8,
+              transition: 'opacity 0.2s',
+              zIndex: 2
+            }}
+          >
+            {showPassword ? (
+              // Eye open SVG
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            ) : (
+              // Eye closed / crossed SVG
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
+            )}
+          </button>
+        </div>
+
+        {/* Password length indicator for registration */}
+        {isRegistering && (
+          <div style={{
+            fontSize: '0.75rem',
+            fontFamily: 'var(--font-main)',
+            marginBottom: '0.9rem',
+            paddingLeft: '0.4rem',
+            color: password.length === 0
+              ? 'var(--color-text-muted)'
+              : (password.length >= 7 && password.length <= 22)
+                ? '#10b981'
+                : '#f59e0b',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.3rem'
+          }}>
+            {password.length === 0 ? (
+              <span>🔒 7 a 22 caracteres</span>
+            ) : (password.length >= 7 && password.length <= 22) ? (
+              <span>✓ Longitud correcta ({password.length}/22 caracteres)</span>
+            ) : (
+              <span>⚠️ Debe tener entre 7 y 22 caracteres ({password.length})</span>
+            )}
+          </div>
+        )}
 
         {/* Google reCAPTCHA v2 */}
         <GoogleReCaptcha 
