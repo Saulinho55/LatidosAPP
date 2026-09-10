@@ -4,30 +4,28 @@ import { useLatidos } from '../../context/LatidosContext';
 import { supabase } from '../../lib/supabase';
 
 const PendingCountdown = ({ fecha }) => {
-  const [timeLeft, setTimeLeft] = useState(() => {
+  const calculateRemaining = () => {
     if (!fecha) return '10:00';
-    const elapsed = Date.now() - new Date(fecha).getTime();
+    const txTime = new Date(fecha).getTime();
+    if (isNaN(txTime)) return '10:00';
+    const elapsed = Date.now() - txTime;
     const remaining = Math.max(0, Math.floor((10 * 60 * 1000 - elapsed) / 1000));
     const m = Math.floor(remaining / 60);
     const s = remaining % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  });
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const [timeLeft, setTimeLeft] = useState(calculateRemaining);
 
   useEffect(() => {
-    if (!fecha) return;
-    const update = () => {
-      const elapsed = Date.now() - new Date(fecha).getTime();
-      const remaining = Math.max(0, Math.floor((10 * 60 * 1000 - elapsed) / 1000));
-      const m = Math.floor(remaining / 60);
-      const s = remaining % 60;
-      setTimeLeft(`${m}:${s.toString().padStart(2, '0')}`);
-    };
-    update();
-    const timer = setInterval(update, 1000);
+    setTimeLeft(calculateRemaining());
+    const timer = setInterval(() => {
+      setTimeLeft(calculateRemaining());
+    }, 1000);
     return () => clearInterval(timer);
   }, [fecha]);
 
-  return <span style={{ opacity: 0.9, fontWeight: '700' }}>({timeLeft})</span>;
+  return <span style={{ opacity: 0.95, fontWeight: '700', marginLeft: '0.25rem' }}>({timeLeft})</span>;
 };
 
 const ComercioHoy = () => {
@@ -332,7 +330,7 @@ const ComercioHoy = () => {
                           </span>
                         ) : (
                           <span style={{ backgroundColor: 'rgba(245, 158, 11, 0.18)', color: '#d97706', padding: '0.3rem 0.65rem', borderRadius: '1rem', fontWeight: '800', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                            ⏳ Esperando validar
+                            ⏳ Esperando validar <PendingCountdown fecha={tx.fecha} />
                           </span>
                         )}
                       </td>
