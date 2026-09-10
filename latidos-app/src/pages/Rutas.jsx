@@ -354,7 +354,7 @@ const LiveMap = ({ position, route, points, targetRoute, targetPoints, onEditPoi
                       <button
                         onClick={() => onEditPoint(i, pt.name)}
                         style={{
-                          backgroundColor: '#3b82f6',
+                          backgroundColor: 'var(--color-accent)',
                           color: 'white',
                           border: 'none',
                           borderRadius: '0.5rem',
@@ -962,8 +962,8 @@ const RutasPage = () => {
                       onClick={() => handleOpenEditPoint(pt.originalIndex !== undefined ? pt.originalIndex : idx, pt.name)}
                       title="Editar nombre del punto"
                       style={{
-                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                        color: '#2563eb',
+                        backgroundColor: 'rgba(212, 96, 122, 0.15)',
+                        color: 'var(--color-accent)',
                         border: 'none',
                         borderRadius: '0.5rem',
                         padding: '0.25rem 0.45rem',
@@ -1152,7 +1152,7 @@ const RutasPage = () => {
                 </button>
                 <button 
                   type="submit"
-                  style={{ flex: 1, padding: '0.75rem', borderRadius: '2rem', border: 'none', backgroundColor: '#3b82f6', color: 'white', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}
+                  style={{ flex: 1, padding: '0.75rem', borderRadius: '2rem', border: 'none', backgroundColor: 'var(--color-accent)', color: 'white', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(212, 96, 122, 0.35)' }}
                 >
                   Guardar cambios
                 </button>
@@ -1412,7 +1412,7 @@ const RutasPage = () => {
           <div style={{ backgroundColor: 'var(--color-card)', padding: '1.5rem', borderRadius: '1.5rem', width: '100%', maxWidth: '400px', boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'var(--color-text)', marginBottom: '0.5rem' }}>{tr?.guardarRuta || 'Guardar Ruta'}</h3>
             <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-              <span style={{ color: '#22c55e', fontWeight: 'bold' }}>{formatDistance(distanceM)}</span> • {routeSteps.toLocaleString('es-ES')} {tr?.pasos || 'pasos'} • +{earnedLatidos} ❤
+              <span style={{ color: '#22c55e', fontWeight: 'bold' }}>{formatDistance(routeDistanceM)}</span> • {routeSteps.toLocaleString('es-ES')} {tr?.pasos || 'pasos'} • +{earnedLatidos} ❤
             </p>
             <input 
               type="text" 
