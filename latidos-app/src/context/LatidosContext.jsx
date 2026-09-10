@@ -980,6 +980,11 @@ export const LatidosProvider = ({ children }) => {
     setRoutePoints(prev => [...prev, { lat: coords.lat, lon: coords.lon, name: ptName, time: Date.now() }]);
   };
 
+  const editRouteCheckpoint = (index, newName) => {
+    if (!newName || !newName.trim()) return;
+    setRoutePoints(prev => prev.map((pt, i) => i === index ? { ...pt, name: newName.trim() } : pt));
+  };
+
   const removeRouteCheckpoint = (index) => {
     setRoutePoints(prev => prev.filter((_, i) => i !== index));
   };
@@ -1186,7 +1191,7 @@ export const LatidosProvider = ({ children }) => {
       isRouteActive, isRouteTracking, routeElapsed, routeDistanceM, routePath, routePoints,
       replicatedRoute, isVehicleDetected, currentSpeedKmh, currentPosition,
       startRouteSession, pauseRouteSession, resumeRouteSession, discardRouteSession,
-      addRouteCheckpoint, removeRouteCheckpoint, finishRouteSession,
+      addRouteCheckpoint, editRouteCheckpoint, removeRouteCheckpoint, finishRouteSession,
       login, logout, loginUser, registerUser,
       fetchAdminStats, fetchAdminUsers, createUser, fetchComercios, createComercio, updateComercio,
       deleteComercio, updateUser, deleteUser, validarBono, rechazarBono, fetchComercioStats, updateComercioBonos,

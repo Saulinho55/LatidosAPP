@@ -194,6 +194,11 @@ export const useGeolocation = () => {
     setPoints(prev => prev.filter((_, i) => i !== index));
   }, []);
 
+  const editPoint = useCallback((index, newName) => {
+    if (!newName || !newName.trim()) return;
+    setPoints(prev => prev.map((pt, i) => i === index ? { ...pt, name: newName.trim() } : pt));
+  }, []);
+
   const resetRoute = useCallback(() => {
     lastPointRef.current = null;
     lastTimeRef.current = null;
@@ -226,6 +231,7 @@ export const useGeolocation = () => {
     startTracking,
     stopTracking,
     addPoint,
+    editPoint,
     removePoint,
     resetRoute,
     setRoute,

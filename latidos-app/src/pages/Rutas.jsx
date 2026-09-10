@@ -285,7 +285,7 @@ const DEFAULT_POPULAR_ROUTES = [
   }
 ];
 
-const LiveMap = ({ position, route, points, targetRoute, targetPoints, onRemovePoint, tr }) => {
+const LiveMap = ({ position, route, points, targetRoute, targetPoints, onEditPoint, onRemovePoint, tr }) => {
   const currentPos = position || { lat: 28.0048, lon: -15.4158 };
   const positions = (route || []).map(p => [p.lat, p.lon]);
   const targetPositions = (targetRoute || []).map(p => [p.lat, p.lon]);
@@ -349,23 +349,48 @@ const LiveMap = ({ position, route, points, targetRoute, targetPoints, onRemoveP
                   <p style={{ margin: '0 0 0.4rem', fontSize: '0.85rem', color: '#16a34a', fontWeight: '800' }}>
                     🟢 Distancia: {formatDistance(distToPt)}
                   </p>
-                  {onRemovePoint && (
-                    <button
-                      onClick={() => onRemovePoint(i)}
-                      style={{
-                        backgroundColor: '#e74c3c',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '0.5rem',
-                        padding: '0.3rem 0.6rem',
-                        fontSize: '0.75rem',
-                        cursor: 'pointer',
-                        fontWeight: '600'
-                      }}
-                    >
-                      🗑️ {tr?.eliminar || 'Eliminar'}
-                    </button>
-                  )}
+                  <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center', marginTop: '0.3rem' }}>
+                    {onEditPoint && (
+                      <button
+                        onClick={() => onEditPoint(i, pt.name)}
+                        style={{
+                          backgroundColor: '#3b82f6',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '0.5rem',
+                          padding: '0.3rem 0.6rem',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          fontWeight: '600',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.2rem'
+                        }}
+                      >
+                        ✏️ {tr?.editar || 'Editar'}
+                      </button>
+                    )}
+                    {onRemovePoint && (
+                      <button
+                        onClick={() => onRemovePoint(i)}
+                        style={{
+                          backgroundColor: '#e74c3c',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '0.5rem',
+                          padding: '0.3rem 0.6rem',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          fontWeight: '600',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.2rem'
+                        }}
+                      >
+                        🗑️ {tr?.eliminar || 'Eliminar'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </Popup>
             </Marker>
@@ -531,6 +556,7 @@ const RutasPage = () => {
     resumeRouteSession,
     discardRouteSession,
     addRouteCheckpoint,
+    editRouteCheckpoint,
     removeRouteCheckpoint,
     finishRouteSession
   } = useLatidos();
@@ -542,6 +568,9 @@ const RutasPage = () => {
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [showAddPointModal, setShowAddPointModal] = useState(false);
   const [newPointName, setNewPointName] = useState('');
+  const [showEditPointModal, setShowEditPointModal] = useState(false);
+  const [editingPointIndex, setEditingPointIndex] = useState(null);
+  const [editingPointName, setEditingPointName] = useState('');
   const [editingRoute, setEditingRoute] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [routeName, setRouteName] = useState('');
@@ -568,6 +597,28 @@ const RutasPage = () => {
     addRouteCheckpoint(finalPtName, currentPos);
     setShowAddPointModal(false);
     setNewPointName('');
+  };
+
+  const handleOpenEditPoint = (index, currentName) => {
+    setEditingPointIndex(index);
+    setEditingPointName(currentName || `Punto ${index + 1}`);
+    setShowEditPointModal(true);
+  };
+
+  const handleConfirmEditPoint = (e) => {
+    e?.preventDefault?.();
+    if (editingPointIndex !== null && editingPointName.trim()) {
+      editRouteCheckpoint(editingPointIndex, editingPointName.trim());
+    }
+    setShowEditPointModal(false);
+    setEditingPointIndex(null);
+    setEditingPointName('');
+  };
+
+  const handleDeletePointDirectly = (index) => {
+    if (window.confirm('¿Eliminar este punto de control?')) {
+      removeRouteCheckpoint(index);
+    }
   };
 
   const handleFinish = () => {
@@ -731,6 +782,7 @@ const RutasPage = () => {
     (routePoints || []).forEach((p, idx) => {
       list.push({
         id: `live-${idx}`,
+        originalIndex: idx,
         name: p.name || `Punto ${idx + 1}`,
         lat: p.lat,
         lon: p.lon,
@@ -840,7 +892,8 @@ const RutasPage = () => {
         points={routePoints}
         targetRoute={replicatedRoute ? getSafePath(replicatedRoute) : null}
         targetPoints={replicatedRoute ? getSafePoints(replicatedRoute) : null}
-        onRemovePoint={removeRouteCheckpoint}
+        onEditPoint={handleOpenEditPoint}
+        onRemovePoint={handleDeletePointDirectly}
         tr={tr}
       />
 
@@ -902,6 +955,44 @@ const RutasPage = () => {
                     a {formatDistance(pt.distance)}
                   </p>
                 </div>
+                {!pt.isReplicated && (
+                  <div style={{ display: 'flex', gap: '0.3rem', marginLeft: '0.2rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditPoint(pt.originalIndex !== undefined ? pt.originalIndex : idx, pt.name)}
+                      title="Editar nombre del punto"
+                      style={{
+                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                        color: '#2563eb',
+                        border: 'none',
+                        borderRadius: '0.5rem',
+                        padding: '0.25rem 0.45rem',
+                        fontSize: '0.78rem',
+                        cursor: 'pointer',
+                        fontWeight: '700'
+                      }}
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePointDirectly(pt.originalIndex !== undefined ? pt.originalIndex : idx)}
+                      title="Eliminar punto"
+                      style={{
+                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                        color: '#dc2626',
+                        border: 'none',
+                        borderRadius: '0.5rem',
+                        padding: '0.25rem 0.45rem',
+                        fontSize: '0.78rem',
+                        cursor: 'pointer',
+                        fontWeight: '700'
+                      }}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1012,6 +1103,58 @@ const RutasPage = () => {
                   style={{ flex: 1, padding: '0.75rem', borderRadius: '2rem', border: 'none', backgroundColor: '#22c55e', color: 'white', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)' }}
                 >
                   Guardar Punto
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Editar Punto de Interés en el momento */}
+      {showEditPointModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ backgroundColor: 'var(--color-card)', padding: '1.5rem', borderRadius: '1.5rem', width: '100%', maxWidth: '380px', boxShadow: '0 8px 30px rgba(0,0,0,0.3)', border: '1px solid var(--color-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <span style={{ fontSize: '1.5rem' }}>✏️</span>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', color: 'var(--color-text)', margin: 0 }}>
+                Editar Punto de Interés
+              </h3>
+            </div>
+            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', marginBottom: '1.2rem' }}>
+              Modifica el nombre de este punto de control:
+            </p>
+            <form onSubmit={handleConfirmEditPoint}>
+              <input 
+                type="text"
+                autoFocus
+                value={editingPointName}
+                onChange={e => setEditingPointName(e.target.value)}
+                placeholder="Ej: Plaza de San Juan, Fuente..."
+                style={{
+                  width: '100%',
+                  padding: '0.85rem',
+                  borderRadius: '1rem',
+                  border: '1px solid var(--color-border)',
+                  backgroundColor: 'var(--color-input-bg)',
+                  color: 'var(--color-text)',
+                  fontSize: '0.95rem',
+                  outline: 'none',
+                  marginBottom: '1.2rem'
+                }}
+              />
+              <div style={{ display: 'flex', gap: '0.6rem' }}>
+                <button 
+                  type="button"
+                  onClick={() => { setShowEditPointModal(false); setEditingPointIndex(null); }}
+                  style={{ flex: 1, padding: '0.75rem', borderRadius: '2rem', border: '1px solid var(--color-border)', backgroundColor: 'transparent', color: 'var(--color-text)', fontWeight: '600', cursor: 'pointer' }}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  style={{ flex: 1, padding: '0.75rem', borderRadius: '2rem', border: 'none', backgroundColor: '#3b82f6', color: 'white', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}
+                >
+                  Guardar cambios
                 </button>
               </div>
             </form>
