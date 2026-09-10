@@ -74,24 +74,6 @@ const AdminUsers = () => {
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
-    if (newUserData.password) {
-      if (newUserData.password.length < 7 || newUserData.password.length > 22) {
-        alert('La contraseña debe tener entre 7 y 22 caracteres.');
-        return;
-      }
-      if (!/[A-Z]/.test(newUserData.password)) {
-        alert('La contraseña debe contener al menos una letra mayúscula.');
-        return;
-      }
-      if (!/[0-9]/.test(newUserData.password)) {
-        alert('La contraseña debe contener al menos un número.');
-        return;
-      }
-      if (!/[^A-Za-z0-9]/.test(newUserData.password)) {
-        alert('La contraseña debe contener al menos un carácter especial (ej: !@#$*&).');
-        return;
-      }
-    }
     const payload = {
       name: newUserData.name.trim(),
       email: newUserData.email.trim().toLowerCase(),

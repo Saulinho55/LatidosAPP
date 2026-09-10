@@ -191,8 +191,8 @@ const Login = () => {
             placeholder={isRegistering ? 'Contraseña (7 a 22 caracteres)' : 'Contraseña'} 
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            minLength={7}
-            maxLength={22}
+            minLength={isRegistering ? 7 : undefined}
+            maxLength={isRegistering ? 22 : undefined}
             autoComplete={isRegistering ? 'new-password' : 'current-password'}
             style={{ ...InputStyle, marginBottom: 0, paddingRight: '2.9rem' }}
             required
