@@ -46,6 +46,18 @@ const Login = () => {
         setError('La contraseña debe tener entre 7 y 22 caracteres.');
         return;
       }
+      if (!/[A-Z]/.test(password)) {
+        setError('La contraseña debe incluir al menos una letra mayúscula.');
+        return;
+      }
+      if (!/[0-9]/.test(password)) {
+        setError('La contraseña debe incluir al menos un número.');
+        return;
+      }
+      if (!/[^A-Za-z0-9]/.test(password)) {
+        setError('La contraseña debe incluir al menos un carácter especial (ej: !@#$*&).');
+        return;
+      }
       if (!termsAccepted) {
         setError('Debes aceptar los Términos y Condiciones para crear una cuenta.');
         return;
@@ -224,29 +236,63 @@ const Login = () => {
           </button>
         </div>
 
-        {/* Password length indicator for registration */}
+        {/* Password requirements checklist for registration */}
         {isRegistering && (
           <div style={{
-            fontSize: '0.75rem',
-            fontFamily: 'var(--font-main)',
-            marginBottom: '0.9rem',
-            paddingLeft: '0.4rem',
-            color: password.length === 0
-              ? 'var(--color-text-muted)'
-              : (password.length >= 7 && password.length <= 22)
-                ? '#10b981'
-                : '#f59e0b',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.3rem'
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '0.35rem 0.6rem',
+            marginBottom: '1rem',
+            padding: '0.4rem 0.6rem',
+            backgroundColor: 'var(--color-card-alt, rgba(255, 255, 255, 0.03))',
+            borderRadius: '0.8rem',
+            border: '1px solid var(--color-border)',
+            fontSize: '0.72rem',
+            fontFamily: 'var(--font-main)'
           }}>
-            {password.length === 0 ? (
-              <span>🔒 7 a 22 caracteres</span>
-            ) : (password.length >= 7 && password.length <= 22) ? (
-              <span>✓ Longitud correcta ({password.length}/22 caracteres)</span>
-            ) : (
-              <span>⚠️ Debe tener entre 7 y 22 caracteres ({password.length})</span>
-            )}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              color: (password.length >= 7 && password.length <= 22) ? '#10b981' : 'var(--color-text-muted)',
+              fontWeight: (password.length >= 7 && password.length <= 22) ? '700' : '500'
+            }}>
+              <span>{(password.length >= 7 && password.length <= 22) ? '✓' : '•'}</span>
+              <span>7 - 22 caracteres</span>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              color: /[A-Z]/.test(password) ? '#10b981' : 'var(--color-text-muted)',
+              fontWeight: /[A-Z]/.test(password) ? '700' : '500'
+            }}>
+              <span>{/[A-Z]/.test(password) ? '✓' : '•'}</span>
+              <span>1 mayúscula</span>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              color: /[0-9]/.test(password) ? '#10b981' : 'var(--color-text-muted)',
+              fontWeight: /[0-9]/.test(password) ? '700' : '500'
+            }}>
+              <span>{/[0-9]/.test(password) ? '✓' : '•'}</span>
+              <span>1 número</span>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              color: /[^A-Za-z0-9]/.test(password) ? '#10b981' : 'var(--color-text-muted)',
+              fontWeight: /[^A-Za-z0-9]/.test(password) ? '700' : '500'
+            }}>
+              <span>{/[^A-Za-z0-9]/.test(password) ? '✓' : '•'}</span>
+              <span>1 caráct. especial</span>
+            </div>
           </div>
         )}
 
