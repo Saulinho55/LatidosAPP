@@ -3,9 +3,9 @@ import { App } from '@capacitor/app';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 
-// Step detection parameters
-const STEP_THRESHOLD = 1.65;       // Linear acceleration threshold in m/s² (human walking)
-const MIN_STEP_INTERVAL_MS = 260;  // Minimum ms between steps (~230 steps/min sprint)
+// Step detection parameters (tuned for human walking vs stationary/chair movements)
+const STEP_THRESHOLD = 2.30;       // Linear acceleration threshold in m/s² (filters out chair movements/desk shifts)
+const MIN_STEP_INTERVAL_MS = 320;  // Minimum ms between steps (human walking cadence ~350-600ms)
 const MAX_STEP_INTERVAL_MS = 2500; // Maximum ms between steps
 
 export const useStepCounter = (initialSteps = 0, options = {}) => {

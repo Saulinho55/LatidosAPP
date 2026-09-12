@@ -142,7 +142,9 @@ export const LatidosProvider = ({ children }) => {
 
         if (routeLastPointRef.current) {
           const dist = haversineDistance(routeLastPointRef.current, newPoint);
-          if (dist >= 2.0 && dist < 60) {
+          // Filter out indoor GPS drift while sitting/in chair (require genuine pedestrian displacement)
+          const isWalkingDisplacement = (dist >= 3.0 && dist < 60) && (speedKmh >= 1.2 || dist >= 4.5);
+          if (isWalkingDisplacement) {
             setRouteDistanceM(prevDist => {
               const nextDist = prevDist + dist;
               

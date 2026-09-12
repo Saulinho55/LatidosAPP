@@ -122,8 +122,9 @@ export const useGeolocation = () => {
 
     if (lastPointRef.current) {
       const dist = haversineDistance(lastPointRef.current, newPoint);
-      // Realistic pedestrian displacement (between 2.0m and 50m)
-      if (dist >= 2.0 && dist < 50) {
+      // Realistic pedestrian displacement (filters out stationary chair/desk GPS drift)
+      const isWalkingDisplacement = (dist >= 3.0 && dist < 50) && (speedKmh >= 1.2 || dist >= 4.5);
+      if (isWalkingDisplacement) {
         setDistanceM((prev) => prev + dist);
         lastPointRef.current = newPoint;
         lastTimeRef.current = now;
