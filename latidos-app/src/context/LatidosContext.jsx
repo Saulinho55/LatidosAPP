@@ -924,9 +924,13 @@ export const LatidosProvider = ({ children }) => {
   const saveRoute = async (routeData) => {
     if (!userId) return;
     try {
+      const isSuperOrAdmin = user?.role === 'superadmin' || user?.role === 'admin';
       const supaRoute = await supabaseService.addRoute({ ...routeData, user_id: userId });
       if (supaRoute) {
         setSavedRoutes(prev => [supaRoute, ...prev]);
+        if (isSuperOrAdmin) {
+          setRecommendedRoutes(prev => [supaRoute, ...prev.filter(r => String(r.id) !== String(supaRoute.id))]);
+        }
       }
     } catch (e) {
       console.error('Error in saveRoute:', e);
@@ -1020,9 +1024,9 @@ export const LatidosProvider = ({ children }) => {
     lastRouteLatidosAwardedRef.current = 0;
     routeRecentReadingsRef.current = [];
     routeVehicleReadingsCount.current = 0;
-    routeLastPointRef.current = currentPosition ? { lat: currentPosition.lat, lon: currentPosition.lon } : null;
-    routeLastTimeRef.current = Date.now();
-    setRoutePath(currentPosition ? [{ lat: currentPosition.lat, lon: currentPosition.lon }] : []);
+    routeLastPointRef.current = null;
+    routeLastTimeRef.current = null;
+    setRoutePath([]);
   };
 
   const pauseRouteSession = () => {

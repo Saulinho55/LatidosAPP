@@ -558,10 +558,17 @@ const RutasPage = () => {
     addRouteCheckpoint,
     editRouteCheckpoint,
     removeRouteCheckpoint,
-    finishRouteSession
+    finishRouteSession,
+    fetchRecommendedRoutes
   } = useLatidos();
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (fetchRecommendedRoutes) {
+      fetchRecommendedRoutes();
+    }
+  }, []);
 
   const [activeTab, setActiveTab] = useState('recommended'); // 'recommended' | 'my_routes'
   const [showSaveModal, setShowSaveModal] = useState(false);

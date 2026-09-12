@@ -618,10 +618,22 @@ export const supabaseService = {
 
   async getRecommendedRoutes() {
     try {
+      let adminIds = [0];
+      try {
+        const { data: adminUsers } = await supabase
+          .from('users')
+          .select('id')
+          .in('role', ['admin', 'superadmin']);
+        if (adminUsers && adminUsers.length > 0) {
+          adminIds = [0, ...adminUsers.map(u => u.id)];
+        }
+      } catch (e) {}
+
+      const filterStr = `user_id.in.(${adminIds.join(',')}),user_id.is.null`;
       const { data, error } = await supabase
         .from('routes')
         .select('*')
-        .or('user_id.eq.0,user_id.is.null')
+        .or(filterStr)
         .order('id', { ascending: false });
 
       if (!error && data && data.length > 0) {
