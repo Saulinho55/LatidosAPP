@@ -17,14 +17,22 @@ const Actividad = () => {
     return d.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  // Combine historical activity with live today's steps
-  let displayActivity = [...(activity || [])];
+  // Combine historical activity with live today's steps and accurate Latidos
+  let displayActivity = (activity || []).map(a => {
+    const p = a.pasos || 0;
+    const l = Math.max(a.latidos_ganados || 0, Math.floor(p / 100));
+    return { ...a, pasos: p, latidos_ganados: l };
+  });
+
   const todayIndex = displayActivity.findIndex(a => a.fecha === todayStr);
 
   if (todayIndex >= 0) {
+    const livePasos = Math.max(displayActivity[todayIndex].pasos || 0, steps || 0);
+    const liveLatidos = Math.max(displayActivity[todayIndex].latidos_ganados || 0, Math.floor(livePasos / 100));
     displayActivity[todayIndex] = {
       ...displayActivity[todayIndex],
-      pasos: Math.max(displayActivity[todayIndex].pasos || 0, steps || 0)
+      pasos: livePasos,
+      latidos_ganados: liveLatidos
     };
   } else if ((steps || 0) > 0) {
     displayActivity.unshift({

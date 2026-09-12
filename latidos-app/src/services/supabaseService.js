@@ -856,20 +856,24 @@ export const supabaseService = {
 
     if (existing) {
       const updatedPasos = Math.max(existing.pasos || 0, pasos);
-      const updatedLatidos = (existing.latidos_ganados || 0) + (latidosGanados || 0);
+      const computedLatidos = Math.max(
+        Math.floor(updatedPasos / 100),
+        (existing.latidos_ganados || 0) + (latidosGanados || 0)
+      );
       const { data, error } = await supabase
         .from('activity')
-        .update({ pasos: updatedPasos, latidos_ganados: updatedLatidos })
+        .update({ pasos: updatedPasos, latidos_ganados: computedLatidos })
         .eq('id', existing.id)
         .select()
         .single();
       if (error) throw error;
       return data;
     } else {
+      const computedLatidos = Math.max(Math.floor((pasos || 0) / 100), latidosGanados || 0);
       const nextId = await getNextId('activity');
       const { data, error } = await supabase
         .from('activity')
-        .insert([{ id: nextId, user_id: userId, fecha, pasos, latidos_ganados: latidosGanados || 0 }])
+        .insert([{ id: nextId, user_id: userId, fecha, pasos, latidos_ganados: computedLatidos }])
         .select()
         .single();
       if (error) throw error;

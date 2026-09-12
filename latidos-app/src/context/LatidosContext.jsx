@@ -312,6 +312,23 @@ export const LatidosProvider = ({ children }) => {
       }
       return next;
     });
+
+    const fecha = new Date().toISOString().slice(0, 10);
+    setActivity(prev => {
+      const exists = prev.some(a => a.fecha === fecha);
+      if (exists) {
+        return prev.map(a => a.fecha === fecha ? {
+          ...a,
+          latidos_ganados: Math.max(Math.floor((a.pasos || steps || 0) / 100), (a.latidos_ganados || 0) + num)
+        } : a);
+      } else {
+        return [{ id: `act-${Date.now()}`, fecha, pasos: steps || 0, latidos_ganados: num }, ...prev];
+      }
+    });
+
+    if (userId) {
+      supabaseService.upsertActivity(userId, fecha, steps || 0, num).catch(console.error);
+    }
   };
 
   const canjearLatidos = (coste) => {
