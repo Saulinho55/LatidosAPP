@@ -298,12 +298,45 @@ const LiveMap = ({ position, route, points, targetRoute, targetPoints, onEditPoi
 
         {/* Target route guide (blue dashed line) */}
         {targetPositions.length > 0 && (
-          <Polyline positions={targetPositions} color="#3b82f6" weight={5} opacity={0.7} dashArray="8, 8" />
+          <>
+            <Polyline positions={targetPositions} color="#3b82f6" weight={5} opacity={0.7} dashArray="8, 8" />
+            <Marker position={targetPositions[0]} icon={startMarkerIcon}>
+              <Popup>
+                <div style={{ textAlign: 'center', padding: '0.2rem' }}>
+                  <p style={{ margin: 0, fontWeight: 'bold', color: '#15803d', fontSize: '0.9rem' }}>
+                    🚩 Inicio de la ruta
+                  </p>
+                </div>
+              </Popup>
+            </Marker>
+            {targetPositions.length > 1 && (
+              <Marker position={targetPositions[targetPositions.length - 1]} icon={endMarkerIcon}>
+                <Popup>
+                  <div style={{ textAlign: 'center', padding: '0.2rem' }}>
+                    <p style={{ margin: 0, fontWeight: 'bold', color: '#0f172a', fontSize: '0.9rem' }}>
+                      🏁 Meta / Fin de la ruta
+                    </p>
+                  </div>
+                </Popup>
+              </Marker>
+            )}
+          </>
         )}
 
         {/* Live user walked route in bright green */}
         {positions.length > 0 && (
-          <Polyline positions={positions} color="#22c55e" weight={6} opacity={0.95} />
+          <>
+            <Polyline positions={positions} color="#22c55e" weight={6} opacity={0.95} />
+            <Marker position={positions[0]} icon={startMarkerIcon}>
+              <Popup>
+                <div style={{ textAlign: 'center', padding: '0.2rem' }}>
+                  <p style={{ margin: 0, fontWeight: 'bold', color: '#15803d', fontSize: '0.9rem' }}>
+                    🚩 Tu punto de inicio
+                  </p>
+                </div>
+              </Popup>
+            </Marker>
+          </>
         )}
         
         {/* User GPS Live Marker in pulsing Green */}
@@ -836,26 +869,54 @@ const RutasPage = () => {
             </p>
           </div>
 
-          {/* Heart Badge with potential latidos */}
-          <div style={{
-            backgroundColor: isRouteTracking ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.18)',
-            border: isRouteTracking ? '1.5px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(255,255,255,0.3)',
-            borderRadius: '1.2rem',
-            padding: '0.6rem 0.9rem',
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            minWidth: '75px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-          }}>
-            <span style={{ fontSize: '1.6rem', lineHeight: '1' }}>❤</span>
-            <span style={{ fontSize: '1.25rem', fontWeight: '800', marginTop: '0.2rem', color: isRouteTracking ? '#22c55e' : 'inherit' }}>
-              +{earnedLatidos}
-            </span>
-            <span style={{ fontSize: '0.68rem', opacity: 0.85, fontWeight: '600', textTransform: 'uppercase' }}>
-              Latidos
-            </span>
+          {/* Heart Badge with potential latidos & Reiniciar button */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+            <div style={{
+              backgroundColor: isRouteTracking ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.18)',
+              border: isRouteTracking ? '1.5px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(255,255,255,0.3)',
+              borderRadius: '1.2rem',
+              padding: '0.6rem 0.9rem',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              minWidth: '75px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+            }}>
+              <span style={{ fontSize: '1.6rem', lineHeight: '1' }}>❤</span>
+              <span style={{ fontSize: '1.25rem', fontWeight: '800', marginTop: '0.2rem', color: isRouteTracking ? '#22c55e' : 'inherit' }}>
+                +{earnedLatidos}
+              </span>
+              <span style={{ fontSize: '0.68rem', opacity: 0.85, fontWeight: '600', textTransform: 'uppercase' }}>
+                Latidos
+              </span>
+            </div>
+            {(isRouteActive || replicatedRoute || (routePoints && routePoints.length > 0)) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('¿Reiniciar y limpiar la ruta para empezar de nuevo desde cero?')) {
+                    discardRouteSession();
+                  }
+                }}
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                  color: 'white',
+                  border: '1px solid rgba(255, 255, 255, 0.4)',
+                  borderRadius: '1rem',
+                  padding: '0.35rem 0.7rem',
+                  fontSize: '0.75rem',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  backdropFilter: 'blur(4px)'
+                }}
+              >
+                🔄 Reiniciar
+              </button>
+            )}
           </div>
         </div>
 
@@ -1054,12 +1115,24 @@ const RutasPage = () => {
               </div>
             )}
 
-            <button 
-              onClick={handleFinish} 
-              style={{ backgroundColor: 'var(--color-accent)', color: 'white', padding: '0.95rem', borderRadius: '2.5rem', width: '100%', fontWeight: '700', border: 'none', cursor: 'pointer', fontSize: '1rem', boxShadow: '0 4px 12px rgba(212, 96, 122, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-            >
-              🏁 {tr?.finalizarRuta || 'Finalizar y guardar'}
-            </button>
+            <div style={{ display: 'flex', gap: '0.6rem' }}>
+              <button 
+                onClick={() => {
+                  if (window.confirm('¿Reiniciar todo y dejar la ruta limpia desde cero como al inicio?')) {
+                    discardRouteSession();
+                  }
+                }}
+                style={{ backgroundColor: 'var(--color-input-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)', padding: '0.95rem', borderRadius: '2.5rem', fontWeight: '700', cursor: 'pointer', fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', flex: '0 0 auto' }}
+              >
+                🔄 Reiniciar
+              </button>
+              <button 
+                onClick={handleFinish} 
+                style={{ flex: 1, backgroundColor: 'var(--color-accent)', color: 'white', padding: '0.95rem', borderRadius: '2.5rem', fontWeight: '700', border: 'none', cursor: 'pointer', fontSize: '1rem', boxShadow: '0 4px 12px rgba(212, 96, 122, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+              >
+                🏁 {tr?.finalizarRuta || 'Finalizar y guardar'}
+              </button>
+            </div>
           </>
         )}
       </div>

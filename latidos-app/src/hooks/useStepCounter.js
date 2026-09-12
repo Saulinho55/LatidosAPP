@@ -3,11 +3,11 @@ import { App } from '@capacitor/app';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 
-// Step detection parameters (tuned for natural human walking and anti-shake filtering)
-const STEP_THRESHOLD = 2.35;        // Peak linear acceleration threshold in m/s² (human walking impact)
-const VALLEY_THRESHOLD = 1.10;      // Hysteresis reset: must drop below this level between steps
-const MAX_WALKING_ACCEL = 12.5;     // Upper ceiling in m/s² (filters out violent manual shaking)
-const MIN_STEP_INTERVAL_MS = 360;   // Minimum ms between steps (human walking cadence ~380-650ms)
+// Step detection parameters (tuned for human walking impact vs orientation changes)
+const STEP_THRESHOLD = 2.45;        // Peak acceleration deviation in m/s² (stride impact)
+const VALLEY_THRESHOLD = 1.05;      // Hysteresis reset: must return near 1g baseline between strides
+const MAX_WALKING_ACCEL = 12.0;     // Upper ceiling in m/s² (filters out violent manual shaking)
+const MIN_STEP_INTERVAL_MS = 380;   // Minimum ms between steps (human walking cadence ~400-650ms)
 const MAX_STEP_INTERVAL_MS = 2500;  // Maximum ms between steps
 
 export const useStepCounter = (initialSteps = 0, options = {}) => {
@@ -17,13 +17,13 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
   const [permissionState, setPermissionState] = useState('idle');
   const [alertMsg, setAlertMsg] = useState(null);
 
+  const isTrackingRef = useRef(false);
   const lastStepTime = useRef(0);
   const lastLinMag = useRef(0);
   const isRising = useRef(false);
   const hasResetValley = useRef(true);
   const stepsRef = useRef(initialSteps);
   const wakeLockRef = useRef(null);
-  const gravityRef = useRef({ x: 0, y: 0, z: 9.8 });
 
   // Sync with initialSteps when it arrives from DB
   useEffect(() => {
@@ -34,40 +34,34 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
   }, [initialSteps]);
 
   const handleMotion = useCallback((event) => {
-    // If vehicle detected externally, pause step counting
+    // Only count steps when tracking is actively running
+    if (!isTrackingRef.current) return;
     if (options.isVehicleDetected) return;
 
-    let linX = 0, linY = 0, linZ = 0;
+    let linMag = 0;
 
-    // Use native linear acceleration (gravity already removed by hardware) if available
+    // Use native linear acceleration if available
     if (event.acceleration && event.acceleration.x != null) {
-      linX = event.acceleration.x;
-      linY = event.acceleration.y;
-      linZ = event.acceleration.z;
+      const { x, y, z } = event.acceleration;
+      linMag = Math.sqrt(x * x + y * y + z * z);
     } else if (event.accelerationIncludingGravity && event.accelerationIncludingGravity.x != null) {
-      // High-pass filter to remove static gravity vector
+      // Magnitude of total vector minus 1g gravity norm (9.80665 m/s²)
+      // Stationary tilt/rotation produces |sqrt(x²+y²+z²) - 9.8| ≈ 0 m/s², eliminating ghost steps completely!
       const { x, y, z } = event.accelerationIncludingGravity;
-      const alpha = 0.8;
-      gravityRef.current.x = alpha * gravityRef.current.x + (1 - alpha) * x;
-      gravityRef.current.y = alpha * gravityRef.current.y + (1 - alpha) * y;
-      gravityRef.current.z = alpha * gravityRef.current.z + (1 - alpha) * z;
-
-      linX = x - gravityRef.current.x;
-      linY = y - gravityRef.current.y;
-      linZ = z - gravityRef.current.z;
+      const totalMag = Math.sqrt(x * x + y * y + z * z);
+      linMag = Math.abs(totalMag - 9.80665);
     } else {
       return;
     }
 
-    const linMag = Math.sqrt(linX * linX + linY * linY + linZ * linZ);
     const now = Date.now();
 
-    // Hysteresis valley reset: signal must return below valley threshold to enable next step
+    // Hysteresis valley reset: signal must return to baseline between foot strikes
     if (linMag < VALLEY_THRESHOLD) {
       hasResetValley.current = true;
     }
 
-    // Detect upward slope crossing threshold (must have reset valley and be under violent shake ceiling)
+    // Detect upward slope crossing threshold
     if (hasResetValley.current && linMag > STEP_THRESHOLD && linMag < MAX_WALKING_ACCEL && !isRising.current) {
       isRising.current = true;
     }
@@ -79,7 +73,7 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
 
       if (interval >= MIN_STEP_INTERVAL_MS && linMag < MAX_WALKING_ACCEL) {
         lastStepTime.current = now;
-        hasResetValley.current = false; // Require valley reset before next stride
+        hasResetValley.current = false;
         stepsRef.current += 1;
         setSteps(stepsRef.current);
       }
@@ -146,10 +140,12 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
       window.addEventListener('devicemotion', handleMotion, { passive: true });
     }
     
+    isTrackingRef.current = true;
     setIsTracking(true);
   }, [handleMotion]);
 
   const stopTracking = useCallback(async () => {
+    isTrackingRef.current = false;
     if (typeof window !== 'undefined' && typeof window.DeviceMotionEvent !== 'undefined') {
       window.removeEventListener('devicemotion', handleMotion);
     }
