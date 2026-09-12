@@ -3,10 +3,12 @@ import { App } from '@capacitor/app';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 
-// Step detection parameters (tuned for human walking vs stationary/chair movements)
-const STEP_THRESHOLD = 2.30;       // Linear acceleration threshold in m/s² (filters out chair movements/desk shifts)
-const MIN_STEP_INTERVAL_MS = 320;  // Minimum ms between steps (human walking cadence ~350-600ms)
-const MAX_STEP_INTERVAL_MS = 2500; // Maximum ms between steps
+// Step detection parameters (tuned for natural human walking and anti-shake filtering)
+const STEP_THRESHOLD = 2.35;        // Peak linear acceleration threshold in m/s² (human walking impact)
+const VALLEY_THRESHOLD = 1.10;      // Hysteresis reset: must drop below this level between steps
+const MAX_WALKING_ACCEL = 12.5;     // Upper ceiling in m/s² (filters out violent manual shaking)
+const MIN_STEP_INTERVAL_MS = 360;   // Minimum ms between steps (human walking cadence ~380-650ms)
+const MAX_STEP_INTERVAL_MS = 2500;  // Maximum ms between steps
 
 export const useStepCounter = (initialSteps = 0, options = {}) => {
   const [steps, setSteps] = useState(initialSteps);
@@ -18,6 +20,7 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
   const lastStepTime = useRef(0);
   const lastLinMag = useRef(0);
   const isRising = useRef(false);
+  const hasResetValley = useRef(true);
   const stepsRef = useRef(initialSteps);
   const wakeLockRef = useRef(null);
   const gravityRef = useRef({ x: 0, y: 0, z: 9.8 });
@@ -59,8 +62,13 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
     const linMag = Math.sqrt(linX * linX + linY * linY + linZ * linZ);
     const now = Date.now();
 
-    // Detect upward slope crossing threshold
-    if (linMag > STEP_THRESHOLD && !isRising.current) {
+    // Hysteresis valley reset: signal must return below valley threshold to enable next step
+    if (linMag < VALLEY_THRESHOLD) {
+      hasResetValley.current = true;
+    }
+
+    // Detect upward slope crossing threshold (must have reset valley and be under violent shake ceiling)
+    if (hasResetValley.current && linMag > STEP_THRESHOLD && linMag < MAX_WALKING_ACCEL && !isRising.current) {
       isRising.current = true;
     }
 
@@ -69,8 +77,9 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
       isRising.current = false;
       const interval = now - lastStepTime.current;
 
-      if (interval >= MIN_STEP_INTERVAL_MS) {
+      if (interval >= MIN_STEP_INTERVAL_MS && linMag < MAX_WALKING_ACCEL) {
         lastStepTime.current = now;
+        hasResetValley.current = false; // Require valley reset before next stride
         stepsRef.current += 1;
         setSteps(stepsRef.current);
       }
