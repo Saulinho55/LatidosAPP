@@ -65,38 +65,53 @@ export const useGeolocation = () => {
     }
   }, []);
 
+  const recentReadingsRef = useRef([]);
+
   const handlePosition = useCallback((pos) => {
     const { latitude: lat, longitude: lon, accuracy, speed } = pos.coords;
     const now = Date.now();
     const newPoint = { lat, lon };
 
+    // Discard inaccurate GPS readings (> 40 meters error)
+    if (typeof accuracy === 'number' && accuracy > 40) {
+      return;
+    }
+
+    // Maintain a rolling window of recent GPS fixes for smooth speed estimation
+    recentReadingsRef.current.push({ lat, lon, time: now });
+    if (recentReadingsRef.current.length > 5) {
+      recentReadingsRef.current.shift();
+    }
+
     let speedKmh = 0;
-    if (typeof speed === 'number' && speed >= 0) {
+    if (typeof speed === 'number' && speed >= 0.2) {
       speedKmh = speed * 3.6;
-    } else if (lastPointRef.current && lastTimeRef.current) {
-      const dt = (now - lastTimeRef.current) / 1000;
-      if (dt > 0.5) {
-        const d = haversineDistance(lastPointRef.current, newPoint);
+    } else if (recentReadingsRef.current.length >= 2) {
+      const first = recentReadingsRef.current[0];
+      const last = recentReadingsRef.current[recentReadingsRef.current.length - 1];
+      const dt = (last.time - first.time) / 1000;
+      if (dt >= 1.5) {
+        const d = haversineDistance(first, last);
         speedKmh = (d / dt) * 3.6;
       }
     }
 
+    speedKmh = Math.min(120, Math.max(0, speedKmh));
     setCurrentSpeedKmh(speedKmh);
     setPosition({ lat, lon, accuracy, speed: speedKmh / 3.6 });
 
-    // Vehicle detection check: If speed > 20 km/h or impossible pedestrian jump
+    // Vehicle detection check: speed > 20 km/h over consecutive readings
     if (speedKmh > MAX_PEDESTRIAN_SPEED_KMH) {
       vehicleReadingsCount.current += 1;
-      if (vehicleReadingsCount.current >= 1) {
+      if (vehicleReadingsCount.current >= 2) {
         setIsVehicleDetected(true);
       }
-      // DO NOT add vehicular distance or vehicular route points to pedestrian walk
       lastPointRef.current = newPoint;
       lastTimeRef.current = now;
       return;
     } else {
       if (vehicleReadingsCount.current > 0) {
-        vehicleReadingsCount.current = Math.max(0, vehicleReadingsCount.current - 1);
+        vehicleReadingsCount.current -= 1;
       }
       if (vehicleReadingsCount.current === 0) {
         setIsVehicleDetected(false);
@@ -107,8 +122,8 @@ export const useGeolocation = () => {
 
     if (lastPointRef.current) {
       const dist = haversineDistance(lastPointRef.current, newPoint);
-      // Ignore micro-jitter below 2.5 meters, and ignore massive unrealistic teleport jumps (> 150m in 2s)
-      if (dist > 2.5 && dist < 150) {
+      // Realistic pedestrian displacement (between 2.0m and 50m)
+      if (dist >= 2.0 && dist < 50) {
         setDistanceM((prev) => prev + dist);
         lastPointRef.current = newPoint;
         lastTimeRef.current = now;

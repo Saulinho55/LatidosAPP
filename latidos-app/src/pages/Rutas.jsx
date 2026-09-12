@@ -576,8 +576,7 @@ const RutasPage = () => {
   const [routeName, setRouteName] = useState('');
   const [expandedRouteId, setExpandedRouteId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
-
-  const speedKmh = currentSpeedKmh || (routeElapsed > 0 ? ((routeDistanceM / 1000) / (routeElapsed / 3600)) : 0);
+  const speedKmh = isRouteTracking ? (currentSpeedKmh || 0) : 0;
   const routeSteps = Math.round(routeDistanceM * 1.312);
   const earnedLatidos = Math.floor(routeSteps / 100);
   const currentPos = currentPosition || { lat: 28.0048, lon: -15.4158 };

@@ -3,12 +3,10 @@ import { App } from '@capacitor/app';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 
-// Step detection algorithm using accelerometer
-// Detects realistic human walking cadence (300ms - 1100ms) and rejects vehicular road vibrations
-const STEP_THRESHOLD_MIN = 1.15;   // minimum g-force delta
-const STEP_THRESHOLD_MAX = 3.20;   // maximum g-force delta (car potholes / drops exceed this)
-const MIN_STEP_INTERVAL_MS = 300; // minimum ms between steps (~200 steps/min sprint limit)
-const MAX_STEP_INTERVAL_MS = 1200; // maximum ms between steps to maintain walking cadence
+// Step detection parameters
+const STEP_THRESHOLD = 1.65;       // Linear acceleration threshold in m/s² (human walking)
+const MIN_STEP_INTERVAL_MS = 260;  // Minimum ms between steps (~230 steps/min sprint)
+const MAX_STEP_INTERVAL_MS = 2500; // Maximum ms between steps
 
 export const useStepCounter = (initialSteps = 0, options = {}) => {
   const [steps, setSteps] = useState(initialSteps);
@@ -18,13 +16,11 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
   const [alertMsg, setAlertMsg] = useState(null);
 
   const lastStepTime = useRef(0);
-  const lastMag = useRef(0);
+  const lastLinMag = useRef(0);
   const isRising = useRef(false);
   const stepsRef = useRef(initialSteps);
   const wakeLockRef = useRef(null);
-  
-  // Rhythmic step buffer (requires 3 consecutive rhythmic steps before committing to prevent road bumps)
-  const candidateStepTimes = useRef([]);
+  const gravityRef = useRef({ x: 0, y: 0, z: 9.8 });
 
   // Sync with initialSteps when it arrives from DB
   useEffect(() => {
@@ -38,48 +34,55 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
     // If vehicle detected externally, pause step counting
     if (options.isVehicleDetected) return;
 
-    const { x, y, z } = event.accelerationIncludingGravity || {};
-    if (x == null || y == null || z == null) return;
+    let linX = 0, linY = 0, linZ = 0;
 
-    const mag = Math.sqrt(x * x + y * y + z * z);
+    // Use native linear acceleration (gravity already removed by hardware) if available
+    if (event.acceleration && event.acceleration.x != null) {
+      linX = event.acceleration.x;
+      linY = event.acceleration.y;
+      linZ = event.acceleration.z;
+    } else if (event.accelerationIncludingGravity && event.accelerationIncludingGravity.x != null) {
+      // High-pass filter to remove static gravity vector
+      const { x, y, z } = event.accelerationIncludingGravity;
+      const alpha = 0.8;
+      gravityRef.current.x = alpha * gravityRef.current.x + (1 - alpha) * x;
+      gravityRef.current.y = alpha * gravityRef.current.y + (1 - alpha) * y;
+      gravityRef.current.z = alpha * gravityRef.current.z + (1 - alpha) * z;
+
+      linX = x - gravityRef.current.x;
+      linY = y - gravityRef.current.y;
+      linZ = z - gravityRef.current.z;
+    } else {
+      return;
+    }
+
+    const linMag = Math.sqrt(linX * linX + linY * linY + linZ * linZ);
     const now = Date.now();
-    const deltaMag = mag - lastMag.current;
 
-    // Detect rising edge crossing threshold within human walking acceleration range
-    if (deltaMag > STEP_THRESHOLD_MIN && deltaMag < STEP_THRESHOLD_MAX && !isRising.current) {
+    // Detect upward slope crossing threshold
+    if (linMag > STEP_THRESHOLD && !isRising.current) {
       isRising.current = true;
     }
 
-    // Detect falling edge — peak passed, evaluate step candidate
-    if (isRising.current && mag < lastMag.current - 0.25) {
+    // Detect peak turning point
+    if (isRising.current && linMag < lastLinMag.current) {
       isRising.current = false;
       const interval = now - lastStepTime.current;
 
-      // Reject road noise if too fast (engine vibration < 300ms)
       if (interval >= MIN_STEP_INTERVAL_MS) {
-        if (interval <= MAX_STEP_INTERVAL_MS) {
-          // Cadence match: consecutive step in rhythmic window
-          candidateStepTimes.current.push(now);
-          if (candidateStepTimes.current.length >= 3) {
-            // Valid continuous walking detected!
-            stepsRef.current += (candidateStepTimes.current.length === 3 ? 3 : 1);
-            setSteps(stepsRef.current);
-          }
-        } else {
-          // Reset rhythm sequence after pause
-          candidateStepTimes.current = [now];
-        }
         lastStepTime.current = now;
+        stepsRef.current += 1;
+        setSteps(stepsRef.current);
       }
     }
 
-    lastMag.current = mag;
+    lastLinMag.current = linMag;
   }, [options.isVehicleDetected]);
 
   const startTracking = useCallback(async () => {
-    const isDesktopWeb = !Capacitor.isNativePlatform() && !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    const isMobile = Capacitor.isNativePlatform() || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
-    if (!isDesktopWeb && typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+    if (isMobile && typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
       try {
         const result = await DeviceMotionEvent.requestPermission();
         if (result !== 'granted') {
@@ -125,33 +128,21 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
         });
 
         await App.minimizeApp();
-      } else {
-        setAlertMsg('Modo de prueba (Web): En tu ordenador no se minimiza ni hay notificaciones nativas. Simulando pasos...');
       }
     } catch (err) {
       console.error(`Error: ${err.message}`);
     }
 
-    if (!isDesktopWeb && typeof window !== 'undefined' && typeof window.DeviceMotionEvent !== 'undefined') {
-      window.addEventListener('devicemotion', handleMotion);
-    } else {
-      // Mock step counting for PC without sensors
-      window._mockStepInterval = setInterval(() => {
-        stepsRef.current += 1;
-        setSteps(stepsRef.current);
-      }, 1000);
+    if (typeof window !== 'undefined' && typeof window.DeviceMotionEvent !== 'undefined') {
+      window.addEventListener('devicemotion', handleMotion, { passive: true });
     }
     
     setIsTracking(true);
   }, [handleMotion]);
 
   const stopTracking = useCallback(async () => {
-    const isDesktopWeb = !Capacitor.isNativePlatform() && !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-
-    if (!isDesktopWeb && typeof window !== 'undefined' && typeof window.DeviceMotionEvent !== 'undefined') {
+    if (typeof window !== 'undefined' && typeof window.DeviceMotionEvent !== 'undefined') {
       window.removeEventListener('devicemotion', handleMotion);
-    } else {
-      clearInterval(window._mockStepInterval);
     }
     if (wakeLockRef.current !== null) {
       wakeLockRef.current.release().catch(console.error);
@@ -177,11 +168,8 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
   // Clean up on unmount
   useEffect(() => {
     return () => {
-      const isDesktopWeb = !Capacitor.isNativePlatform() && !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-      if (!isDesktopWeb && typeof window !== 'undefined' && typeof window.DeviceMotionEvent !== 'undefined') {
+      if (typeof window !== 'undefined' && typeof window.DeviceMotionEvent !== 'undefined') {
         window.removeEventListener('devicemotion', handleMotion);
-      } else {
-        clearInterval(window._mockStepInterval);
       }
     };
   }, [handleMotion]);

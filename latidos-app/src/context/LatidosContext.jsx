@@ -44,6 +44,9 @@ export const LatidosProvider = ({ children }) => {
   const routeLastTimeRef = useRef(null);
   const routeTimerRef = useRef(null);
   const lastRouteStepsAwardedRef = useRef(0);
+  const lastRouteLatidosAwardedRef = useRef(0);
+  const routeRecentReadingsRef = useRef([]);
+  const routeVehicleReadingsCount = useRef(0);
 
   // Get initial location
   useEffect(() => {
@@ -89,39 +92,61 @@ export const LatidosProvider = ({ children }) => {
         const now = Date.now();
         const newPoint = { lat, lon };
 
+        // Discard inaccurate GPS readings (> 40 meters)
+        if (typeof accuracy === 'number' && accuracy > 40) {
+          return;
+        }
+
+        // Rolling window for GPS smoothing
+        routeRecentReadingsRef.current.push({ lat, lon, time: now });
+        if (routeRecentReadingsRef.current.length > 5) {
+          routeRecentReadingsRef.current.shift();
+        }
+
         let speedKmh = 0;
-        if (typeof speed === 'number' && speed >= 0) {
+        if (typeof speed === 'number' && speed >= 0.2) {
           speedKmh = speed * 3.6;
-        } else if (routeLastPointRef.current && routeLastTimeRef.current) {
-          const dt = (now - routeLastTimeRef.current) / 1000;
-          if (dt > 0.5) {
-            const d = haversineDistance(routeLastPointRef.current, newPoint);
+        } else if (routeRecentReadingsRef.current.length >= 2) {
+          const first = routeRecentReadingsRef.current[0];
+          const last = routeRecentReadingsRef.current[routeRecentReadingsRef.current.length - 1];
+          const dt = (last.time - first.time) / 1000;
+          if (dt >= 1.5) {
+            const d = haversineDistance(first, last);
             speedKmh = (d / dt) * 3.6;
           }
         }
 
+        speedKmh = Math.min(120, Math.max(0, speedKmh));
         setCurrentSpeedKmh(speedKmh);
         setCurrentPosition({ lat, lon, accuracy, speed: speedKmh / 3.6 });
 
-        // Vehicular speed check (car, motorbike, electric scooter > 20 km/h)
+        // Vehicular speed check (> 20 km/h)
         if (speedKmh > 20.0) {
-          setIsVehicleDetected(true);
+          routeVehicleReadingsCount.current += 1;
+          if (routeVehicleReadingsCount.current >= 2) {
+            setIsVehicleDetected(true);
+          }
           routeLastPointRef.current = newPoint;
           routeLastTimeRef.current = now;
           return;
         } else {
-          setIsVehicleDetected(false);
+          if (routeVehicleReadingsCount.current > 0) {
+            routeVehicleReadingsCount.current -= 1;
+          }
+          if (routeVehicleReadingsCount.current === 0) {
+            setIsVehicleDetected(false);
+          }
         }
 
         setRoutePath(prev => [...prev, newPoint]);
 
         if (routeLastPointRef.current) {
           const dist = haversineDistance(routeLastPointRef.current, newPoint);
-          if (dist > 2.5 && dist < 150) {
+          if (dist >= 2.0 && dist < 60) {
             setRouteDistanceM(prevDist => {
               const nextDist = prevDist + dist;
               
-              // Real-time steps calculation and synchronization:
+              // Real-time steps calculation and synchronization
               const totalRouteSteps = Math.round(nextDist * 1.312);
               const stepsDelta = totalRouteSteps - lastRouteStepsAwardedRef.current;
               
@@ -136,14 +161,16 @@ export const LatidosProvider = ({ children }) => {
                   return updatedTotalSteps;
                 });
 
-                // Real-time Latidos gain
-                const newLatidos = Math.floor(stepsDelta / 100);
-                if (newLatidos > 0) {
-                  ganarLatidos(newLatidos);
+                // Cumulative Latidos gain (1 Latido every 100 steps)
+                const totalRouteLatidos = Math.floor(totalRouteSteps / 100);
+                const latidosToAward = totalRouteLatidos - lastRouteLatidosAwardedRef.current;
+                if (latidosToAward > 0) {
+                  lastRouteLatidosAwardedRef.current = totalRouteLatidos;
+                  ganarLatidos(latidosToAward);
                   const uid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
                   if (uid) {
                     const fecha = new Date().toISOString().slice(0, 10);
-                    supabaseService.upsertActivity(uid, fecha, steps + stepsDelta, newLatidos).catch(console.error);
+                    supabaseService.upsertActivity(uid, fecha, totalRouteSteps, latidosToAward).catch(console.error);
                   }
                 }
               }
@@ -168,7 +195,7 @@ export const LatidosProvider = ({ children }) => {
         routeWatchIdRef.current = null;
       }
     };
-  }, [isRouteTracking, userId, steps]);
+  }, [isRouteTracking, userId]);
 
   const loadRecommendedRoutes = async () => {
     try {
@@ -301,15 +328,26 @@ export const LatidosProvider = ({ children }) => {
     return true;
   };
 
-  const updateSteps = async (newSteps) => {
-    setSteps(newSteps);
+  const pendingStepsRef = useRef(null);
+  const debounceStepsTimerRef = useRef(null);
+
+  const flushStepsToDB = async (forcedSteps = null) => {
+    const stepsToSave = forcedSteps !== null ? forcedSteps : pendingStepsRef.current;
+    if (stepsToSave === null) return;
+    
     const targetUid = userId || user?.id || parseInt(localStorage.getItem('latidos_user_id'), 10);
     if (!targetUid) return;
 
+    pendingStepsRef.current = null;
+    if (debounceStepsTimerRef.current) {
+      clearTimeout(debounceStepsTimerRef.current);
+      debounceStepsTimerRef.current = null;
+    }
+
     try {
-      await supabaseService.updateUser(targetUid, { steps_today: newSteps });
+      await supabaseService.updateUser(targetUid, { steps_today: stepsToSave });
       const fecha = new Date().toISOString().slice(0, 10);
-      const updatedAct = await supabaseService.upsertActivity(targetUid, fecha, newSteps, 0);
+      const updatedAct = await supabaseService.upsertActivity(targetUid, fecha, stepsToSave, 0);
       if (updatedAct) {
         setActivity(prev => {
           const exists = prev.some(a => a.id === updatedAct.id);
@@ -323,6 +361,41 @@ export const LatidosProvider = ({ children }) => {
       console.error('Error updating steps in Supabase:', e);
     }
   };
+
+  const updateSteps = (newSteps) => {
+    setSteps(newSteps);
+    pendingStepsRef.current = newSteps;
+
+    if (debounceStepsTimerRef.current) {
+      clearTimeout(debounceStepsTimerRef.current);
+    }
+
+    debounceStepsTimerRef.current = setTimeout(() => {
+      flushStepsToDB();
+    }, 2000);
+  };
+
+  useEffect(() => {
+    const handleFlush = () => {
+      if (pendingStepsRef.current !== null) {
+        flushStepsToDB();
+      }
+    };
+    window.addEventListener('beforeunload', handleFlush);
+    const handleVis = () => {
+      if (document.visibilityState === 'hidden') {
+        handleFlush();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVis);
+    return () => {
+      window.removeEventListener('beforeunload', handleFlush);
+      document.removeEventListener('visibilitychange', handleVis);
+      if (debounceStepsTimerRef.current) {
+        clearTimeout(debounceStepsTimerRef.current);
+      }
+    };
+  }, [userId, user]);
 
   const [activeCode, setActiveCode] = useState(() => {
     try {
@@ -494,7 +567,7 @@ export const LatidosProvider = ({ children }) => {
       if (tx && isMounted) handleValidatedTx(tx);
     }).catch(() => {});
 
-    // 3. Ultra-fast 500ms fallback poll
+    // 3. Fallback poll (2.5s)
     const pollInterval = setInterval(async () => {
       try {
         const dbTx = await supabaseService.getTransactionByCode(cleanCode);
@@ -502,7 +575,7 @@ export const LatidosProvider = ({ children }) => {
           handleValidatedTx(dbTx);
         }
       } catch (err) {}
-    }, 500);
+    }, 2500);
 
     return () => {
       isMounted = false;
@@ -944,6 +1017,9 @@ export const LatidosProvider = ({ children }) => {
     setReplicatedRoute(targetReplicated || null);
     setIsVehicleDetected(false);
     lastRouteStepsAwardedRef.current = 0;
+    lastRouteLatidosAwardedRef.current = 0;
+    routeRecentReadingsRef.current = [];
+    routeVehicleReadingsCount.current = 0;
     routeLastPointRef.current = currentPosition ? { lat: currentPosition.lat, lon: currentPosition.lon } : null;
     routeLastTimeRef.current = Date.now();
     setRoutePath(currentPosition ? [{ lat: currentPosition.lat, lon: currentPosition.lon }] : []);
@@ -968,6 +1044,9 @@ export const LatidosProvider = ({ children }) => {
     setReplicatedRoute(null);
     setIsVehicleDetected(false);
     lastRouteStepsAwardedRef.current = 0;
+    lastRouteLatidosAwardedRef.current = 0;
+    routeRecentReadingsRef.current = [];
+    routeVehicleReadingsCount.current = 0;
     routeLastPointRef.current = null;
     routeLastTimeRef.current = null;
   };
