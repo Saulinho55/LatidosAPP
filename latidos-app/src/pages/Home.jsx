@@ -5,26 +5,37 @@ import StepsCard from '../components/Stepcards';
 import StreakCard from '../components/Racha';
 import StepChart from '../components/StepChart';
 import NFCConnection from '../components/NFC';
-import { useStepCounter } from '../hooks/useStepCounter';
 import { useLatidos } from '../context/LatidosContext';
 
 const STEPS_PER_LATIDO = 100;
 
 const Home = () => {
-  const { user, latidos, ganarLatidos, steps: dbSteps, updateSteps, racha, weeklySteps, isAuthenticated, dailyGoal, registrarActividad, currency, tr, isVehicleDetected, isRouteActive } = useLatidos();
   const {
+    user,
+    latidos,
+    ganarLatidos,
     steps,
+    updateSteps,
+    racha,
+    weeklySteps,
+    isAuthenticated,
+    dailyGoal,
+    registrarActividad,
+    currency,
+    tr,
+    isVehicleDetected,
+    isRouteActive,
     isTracking,
     isSupported,
     startTracking,
     stopTracking,
     alertMsg,
     setAlertMsg
-  } = useStepCounter(dbSteps, { isVehicleDetected });
+  } = useLatidos();
   
   const navigate = useNavigate();
 
-  const effectiveSteps = Math.max(dbSteps || 0, steps || 0);
+  const effectiveSteps = steps || 0;
 
   React.useEffect(() => {
     if (isAuthenticated && user?.role === 'comercio') {
@@ -45,44 +56,7 @@ const Home = () => {
     return { day, steps: daySteps };
   });
 
-  // Sync pedometer steps back to DB
-  React.useEffect(() => {
-    if (steps > dbSteps && isAuthenticated && user) {
-      updateSteps(steps);
-    }
-  }, [steps, dbSteps, updateSteps, isAuthenticated, user]);
 
-  // Ensure steps are saved immediately when app is backgrounded or closed
-  React.useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === 'hidden' && steps > dbSteps) {
-        updateSteps(steps);
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [steps, dbSteps, updateSteps]);
-
-  // Award latidos ONLY for new steps walked during active tracking.
-  // When not tracking (e.g. on load, page refresh, app restart),
-  // prevStepsRef is kept in sync with steps so it NEVER awards free latidos.
-  const prevStepsRef = React.useRef(steps);
-  React.useEffect(() => {
-    if (!isTracking) {
-      prevStepsRef.current = steps;
-      return;
-    }
-
-    if (steps > prevStepsRef.current) {
-      const newLatidosEarned =
-        Math.floor(steps / STEPS_PER_LATIDO) - Math.floor(prevStepsRef.current / STEPS_PER_LATIDO);
-      if (newLatidosEarned > 0) {
-        ganarLatidos(newLatidosEarned);
-        registrarActividad(steps, newLatidosEarned);
-      }
-      prevStepsRef.current = steps;
-    }
-  }, [steps, isTracking]);
 
   return (
     <div style={{ paddingBottom: '6rem' }}>

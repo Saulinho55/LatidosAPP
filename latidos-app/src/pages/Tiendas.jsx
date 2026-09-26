@@ -998,11 +998,14 @@ const Tiendas = () => {
     activeCode,
     generarCodigoCanje,
     cancelarCodigoCanje,
-    tr
+    tr,
+    currentPosition
   } = useLatidos();
   const [comercios, setComercios] = useState([]);
   const [selectedShop, setSelectedShop] = useState(null);
-  const [mapCenter, setMapCenter] = useState([28.0034, -15.4144]);
+  const [mapCenter, setMapCenter] = useState(
+    currentPosition?.lat ? [currentPosition.lat, currentPosition.lon] : [28.0034, -15.4144]
+  );
   const [mapZoom, setMapZoom] = useState(15);
 
   useEffect(() => {
@@ -1012,7 +1015,9 @@ const Tiendas = () => {
   }, []);
 
   // Navigation and Geolocation State
-  const [userLocation, setUserLocation] = useState(null);
+  const [userLocation, setUserLocation] = useState(
+    currentPosition?.lat ? [currentPosition.lat, currentPosition.lon] : null
+  );
   const [activeRoute, setActiveRoute] = useState(null); // Array of [lat, lon]
   const [routeStats, setRouteStats] = useState(null);   // { distKm, durationMin, estSteps }
   const [navigatingShop, setNavigatingShop] = useState(null);
@@ -1021,27 +1026,16 @@ const Tiendas = () => {
   // Step Counter for the active route
   const { steps: routeSteps, startTracking, stopTracking } = useStepCounter(0);
 
-  // Track User Location
+  // Sync user location and map center with central currentPosition
   useEffect(() => {
-    if (!navigator.geolocation) return;
-    
-    // Get initial position quickly
-    navigator.geolocation.getCurrentPosition(
-      pos => setUserLocation([pos.coords.latitude, pos.coords.longitude]),
-      err => console.error(err),
-      { enableHighAccuracy: true }
-    );
-
-    const watchId = navigator.geolocation.watchPosition(
-      pos => {
-        setUserLocation([pos.coords.latitude, pos.coords.longitude]);
-      },
-      err => console.error(err),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 2000 }
-    );
-
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
+    if (currentPosition?.lat && currentPosition?.lon) {
+      const newLoc = [currentPosition.lat, currentPosition.lon];
+      setUserLocation(newLoc);
+      if (!selectedShop && !activeRoute && currentPosition.isReal) {
+        setMapCenter(newLoc);
+      }
+    }
+  }, [currentPosition, selectedShop, activeRoute]);
 
   const fetchRouteData = async (startLoc, endLoc) => {
     try {

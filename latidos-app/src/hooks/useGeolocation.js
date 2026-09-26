@@ -48,21 +48,51 @@ export const useGeolocation = () => {
 
   // Get initial location immediately on mount so the map and GPS point load right away
   useEffect(() => {
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude: lat, longitude: lon, accuracy, speed } = pos.coords;
-          setPosition({ lat, lon, accuracy, speed: speed || 0 });
-        },
-        (err) => {
-          // Fallback default coordinates (Telde / Gran Canaria)
-          setPosition({ lat: 28.0048, lon: -15.4158, accuracy: 100, speed: 0 });
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
-      );
-    } else {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setPosition({ lat: 28.0048, lon: -15.4158, accuracy: 100, speed: 0 });
+      return;
     }
+
+    // Step 1: Fast network-assisted fix (cellular/Wi-Fi) - works in <1s even indoors
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lon, accuracy, speed } = pos.coords;
+        setPosition({ lat, lon, accuracy, speed: speed || 0 });
+      },
+      () => {
+        // Step 2: Fallback attempt with higher timeout if network was busy
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const { latitude: lat, longitude: lon, accuracy, speed } = pos.coords;
+            setPosition({ lat, lon, accuracy, speed: speed || 0 });
+          },
+          () => {
+            // Keep default fallback only if completely unreachable
+            setPosition(prev => prev || { lat: 28.0048, lon: -15.4158, accuracy: 100, speed: 0 });
+          },
+          { enableHighAccuracy: false, timeout: 12000, maximumAge: 60000 }
+        );
+      },
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+    );
+
+    // Step 3: Progressive refinement watcher
+    const initWatchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lon, accuracy, speed } = pos.coords;
+        setPosition({ lat, lon, accuracy, speed: speed || 0 });
+      },
+      (err) => {
+        console.warn('Initial geolocation watch notice:', err?.message || err);
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 5000 }
+    );
+
+    return () => {
+      if (initWatchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(initWatchId);
+      }
+    };
   }, []);
 
   const recentReadingsRef = useRef([]);
@@ -71,11 +101,6 @@ export const useGeolocation = () => {
     const { latitude: lat, longitude: lon, accuracy, speed } = pos.coords;
     const now = Date.now();
     const newPoint = { lat, lon };
-
-    // Discard inaccurate GPS readings (> 40 meters error)
-    if (typeof accuracy === 'number' && accuracy > 40) {
-      return;
-    }
 
     // Maintain a rolling window of recent GPS fixes for smooth speed estimation
     recentReadingsRef.current.push({ lat, lon, time: now });
@@ -98,6 +123,7 @@ export const useGeolocation = () => {
 
     speedKmh = Math.min(120, Math.max(0, speedKmh));
     setCurrentSpeedKmh(speedKmh);
+    // Always update position marker on map
     setPosition({ lat, lon, accuracy, speed: speedKmh / 3.6 });
 
     // Vehicle detection check: speed > 20 km/h over consecutive readings
@@ -118,12 +144,17 @@ export const useGeolocation = () => {
       }
     }
 
+    // Odometry filter: discard low-accuracy spikes for distance accumulation (> 80m)
+    if (typeof accuracy === 'number' && accuracy > 80) {
+      return;
+    }
+
     setRoute((prev) => [...prev, newPoint]);
 
     if (lastPointRef.current) {
       const dist = haversineDistance(lastPointRef.current, newPoint);
       // Realistic pedestrian displacement (filters out stationary chair/desk GPS drift)
-      const isWalkingDisplacement = (dist >= 3.0 && dist < 50) && (speedKmh >= 1.2 || dist >= 4.5);
+      const isWalkingDisplacement = (dist >= 2.5 && dist < 50) && (speedKmh >= 1.0 || dist >= 4.0);
       if (isWalkingDisplacement) {
         setDistanceM((prev) => prev + dist);
         lastPointRef.current = newPoint;
@@ -151,25 +182,37 @@ export const useGeolocation = () => {
       }
     }
 
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        setPermissionState('granted');
-        handlePosition(pos);
-      },
-      (err) => {
-        setPermissionState('denied');
-        setError(
-          err.code === 1
-            ? 'Permiso de ubicación denegado.'
-            : 'No se pudo obtener la ubicación.'
-        );
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 2000,
-        timeout: 10000
-      }
-    );
+    const startWatcher = (highAccuracy = true) => {
+      return navigator.geolocation.watchPosition(
+        (pos) => {
+          setPermissionState('granted');
+          handlePosition(pos);
+        },
+        (err) => {
+          if (highAccuracy && (err.code === 3 || err.code === 2)) {
+            // Fallback to low-accuracy network tracking on timeout/GPS unavailable
+            if (watchIdRef.current !== null) {
+              navigator.geolocation.clearWatch(watchIdRef.current);
+            }
+            watchIdRef.current = startWatcher(false);
+            return;
+          }
+          setPermissionState('denied');
+          setError(
+            err.code === 1
+              ? 'Permiso de ubicación denegado.'
+              : 'No se pudo obtener la ubicación precisa.'
+          );
+        },
+        {
+          enableHighAccuracy: highAccuracy,
+          maximumAge: 3000,
+          timeout: highAccuracy ? 15000 : 10000
+        }
+      );
+    };
+
+    watchIdRef.current = startWatcher(true);
     
     // Request WakeLock to prevent device from sleeping while tracking route
     try {

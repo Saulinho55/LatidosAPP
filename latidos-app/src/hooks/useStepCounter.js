@@ -4,10 +4,10 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 
 // Step detection parameters (tuned for human walking impact vs orientation changes)
-const STEP_THRESHOLD = 2.45;        // Peak acceleration deviation in m/s² (stride impact)
-const VALLEY_THRESHOLD = 1.05;      // Hysteresis reset: must return near 1g baseline between strides
-const MAX_WALKING_ACCEL = 12.0;     // Upper ceiling in m/s² (filters out violent manual shaking)
-const MIN_STEP_INTERVAL_MS = 380;   // Minimum ms between steps (human walking cadence ~400-650ms)
+const STEP_THRESHOLD = 1.65;        // Peak acceleration deviation in m/s² (stride impact while walking)
+const VALLEY_THRESHOLD = 1.18;      // Hysteresis reset: must return near baseline between strides
+const MAX_WALKING_ACCEL = 14.0;     // Upper ceiling in m/s² (filters out violent manual shaking)
+const MIN_STEP_INTERVAL_MS = 290;   // Minimum ms between steps (human walking cadence ~300-800ms)
 const MAX_STEP_INTERVAL_MS = 2500;  // Maximum ms between steps
 
 export const useStepCounter = (initialSteps = 0, options = {}) => {
@@ -39,10 +39,15 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
     if (options.isVehicleDetected) return;
 
     let linMag = 0;
+    const nativeLin = event.acceleration;
+    // Android Zero-Trap Fix: Many Android WebViews expose acceleration as {x:0, y:0, z:0}
+    // Only use native linear if it contains real non-zero readings
+    const hasNativeLinear = nativeLin && (
+      (Math.abs(nativeLin.x || 0) + Math.abs(nativeLin.y || 0) + Math.abs(nativeLin.z || 0)) > 0.12
+    );
 
-    // Use native linear acceleration if available
-    if (event.acceleration && event.acceleration.x != null) {
-      const { x, y, z } = event.acceleration;
+    if (hasNativeLinear) {
+      const { x, y, z } = nativeLin;
       linMag = Math.sqrt(x * x + y * y + z * z);
     } else if (event.accelerationIncludingGravity && event.accelerationIncludingGravity.x != null) {
       // Magnitude of total vector minus 1g gravity norm (9.80665 m/s²)
@@ -76,11 +81,14 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
         hasResetValley.current = false;
         stepsRef.current += 1;
         setSteps(stepsRef.current);
+        if (typeof options.onStep === 'function') {
+          options.onStep(stepsRef.current);
+        }
       }
     }
 
     lastLinMag.current = linMag;
-  }, [options.isVehicleDetected]);
+  }, [options.isVehicleDetected, options.onStep]);
 
   const startTracking = useCallback(async () => {
     const isMobile = Capacitor.isNativePlatform() || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
@@ -109,31 +117,31 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
       }
       
       if (Capacitor.isNativePlatform()) {
-        let permStatus = await LocalNotifications.checkPermissions();
-        if (permStatus.display !== 'granted') {
-          permStatus = await LocalNotifications.requestPermissions();
+        try {
+          let permStatus = await LocalNotifications.checkPermissions();
           if (permStatus.display !== 'granted') {
-            setAlertMsg('Para mantener la app contando pasos de fondo, por favor acepta las notificaciones.');
-            return;
+            permStatus = await LocalNotifications.requestPermissions();
           }
+
+          if (permStatus.display === 'granted') {
+            await LocalNotifications.schedule({
+              notifications: [
+                {
+                  id: 1,
+                  title: "Latidos - Contando Pasos",
+                  body: "La aplicación está contando tus pasos.",
+                  ongoing: true,
+                  autoCancel: false
+                }
+              ]
+            });
+          }
+        } catch (notifErr) {
+          console.warn('LocalNotifications setup warning:', notifErr);
         }
-
-        await LocalNotifications.schedule({
-          notifications: [
-            {
-              id: 1,
-              title: "Latidos - Contando Pasos",
-              body: "La aplicación está contando tus pasos en segundo plano.",
-              ongoing: true,
-              autoCancel: false
-            }
-          ]
-        });
-
-        await App.minimizeApp();
       }
     } catch (err) {
-      console.error(`Error: ${err.message}`);
+      console.error(`Error starting tracking: ${err.message}`);
     }
 
     if (typeof window !== 'undefined' && typeof window.DeviceMotionEvent !== 'undefined') {

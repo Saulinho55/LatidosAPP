@@ -278,6 +278,9 @@ const Perfil = () => {
                 🏪 Comercio
               </span>
             )}
+            <span style={{ fontSize: '0.68rem', backgroundColor: 'var(--color-card-alt)', color: 'var(--color-header-text)', fontWeight: '700', padding: '0.1rem 0.45rem', borderRadius: '1rem', border: '1px solid var(--color-border)', opacity: 0.9 }}>
+              v1.0.0
+            </span>
           </div>
           <p style={{
             fontFamily: 'var(--font-display)',
@@ -665,6 +668,28 @@ const Perfil = () => {
             </div>
           </div>
         )}
+      </div>
+
+      {/* ── App Version Badge ── */}
+      <div style={{ textAlign: 'center', marginTop: '1.4rem', marginBottom: '1.2rem' }}>
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.45rem',
+          fontSize: '0.78rem',
+          fontFamily: 'var(--font-main)',
+          color: 'var(--color-detail)',
+          backgroundColor: 'var(--color-card)',
+          padding: '0.4rem 0.95rem',
+          borderRadius: '1.2rem',
+          boxShadow: 'var(--shadow-card)',
+          border: '1px solid var(--color-border)'
+        }}>
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e', display: 'inline-block' }}></span>
+          <span style={{ fontWeight: '600', color: 'var(--color-text)' }}>Latidos</span>
+          <span style={{ opacity: 0.5 }}>•</span>
+          <span style={{ fontWeight: '700', color: 'var(--color-accent)' }}>Versión 1.0.0</span>
+        </div>
       </div>
     </div>
   );

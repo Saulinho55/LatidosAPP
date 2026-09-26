@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { supabase } from '../lib/supabase';
 import { supabaseService } from '../services/supabaseService';
 import { haversineDistance } from '../hooks/useGeolocation';
+import { useStepCounter } from '../hooks/useStepCounter';
 import { t } from '../i18n';
 
 const LatidosContext = createContext(null);
@@ -37,7 +38,9 @@ export const LatidosProvider = ({ children }) => {
   const [replicatedRoute, setReplicatedRoute] = useState(null);
   const [isVehicleDetected, setIsVehicleDetected] = useState(false);
   const [currentSpeedKmh, setCurrentSpeedKmh] = useState(0);
-  const [currentPosition, setCurrentPosition] = useState({ lat: 28.0048, lon: -15.4158, accuracy: 100, speed: 0 });
+  const [currentPosition, setCurrentPosition] = useState({ lat: 28.0048, lon: -15.4158, accuracy: 100, speed: 0, isReal: false });
+  const [hasRealLocation, setHasRealLocation] = useState(false);
+  const globalWatchIdRef = useRef(null);
 
   const routeWatchIdRef = useRef(null);
   const routeLastPointRef = useRef(null);
@@ -48,18 +51,112 @@ export const LatidosProvider = ({ children }) => {
   const routeRecentReadingsRef = useRef([]);
   const routeVehicleReadingsCount = useRef(0);
 
-  // Get initial location
+  // ── Global Step Counter (persists across navigation tabs) ──
+  const {
+    steps: pedometerSteps,
+    isTracking: isStepTracking,
+    isSupported: isStepSupported,
+    alertMsg: stepAlertMsg,
+    setAlertMsg: setStepAlertMsg,
+    startTracking: startStepTracking,
+    stopTracking: stopStepTracking,
+    resetSteps: resetPedometerSteps
+  } = useStepCounter(steps, {
+    isVehicleDetected
+  });
+
+  const prevPedometerStepsRef = useRef(steps);
+
   useEffect(() => {
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude: lat, longitude: lon, accuracy, speed } = pos.coords;
-          setCurrentPosition({ lat, lon, accuracy, speed: speed || 0 });
-        },
-        () => {},
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
-      );
+    if (!isStepTracking) {
+      prevPedometerStepsRef.current = pedometerSteps;
+      return;
     }
+
+    if (pedometerSteps > prevPedometerStepsRef.current) {
+      const stepDelta = pedometerSteps - prevPedometerStepsRef.current;
+      setSteps(prev => {
+        const nextSteps = prev + stepDelta;
+        updateSteps(nextSteps);
+        return nextSteps;
+      });
+
+      const oldLatidos = Math.floor(prevPedometerStepsRef.current / 100);
+      const newLatidos = Math.floor(pedometerSteps / 100);
+      const latidosToAward = newLatidos - oldLatidos;
+
+      if (latidosToAward > 0) {
+        ganarLatidos(latidosToAward);
+        registrarActividad(pedometerSteps, latidosToAward);
+      }
+
+      prevPedometerStepsRef.current = pedometerSteps;
+    }
+  }, [pedometerSteps, isStepTracking]);
+
+  // ── Resilient Geolocation Initializer & Continuous Watcher ──
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    const handlePos = (pos) => {
+      const { latitude: lat, longitude: lon, accuracy, speed } = pos.coords;
+      setCurrentPosition({ lat, lon, accuracy, speed: speed || 0, isReal: true });
+      setHasRealLocation(true);
+    };
+
+    // Phase 1: Fast network fix (cellular / Wi-Fi - works in <1s even indoors)
+    navigator.geolocation.getCurrentPosition(
+      handlePos,
+      () => {
+        // Quick second chance with higher timeout
+        navigator.geolocation.getCurrentPosition(
+          handlePos,
+          () => {},
+          { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+        );
+      },
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+    );
+
+    // Phase 2: Start persistent global watcher with automatic low-accuracy fallback
+    const startGlobalWatcher = (highAccuracy = true) => {
+      if (globalWatchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(globalWatchIdRef.current);
+      }
+      globalWatchIdRef.current = navigator.geolocation.watchPosition(
+        handlePos,
+        (err) => {
+          if (highAccuracy && (err.code === 3 || err.code === 2)) {
+            // High accuracy GPS unavailable / timed out indoors -> use network location
+            startGlobalWatcher(false);
+          }
+        },
+        {
+          enableHighAccuracy: highAccuracy,
+          timeout: highAccuracy ? 18000 : 10000,
+          maximumAge: 5000
+        }
+      );
+    };
+
+    startGlobalWatcher(true);
+
+    // Phase 3: Delayed retry to catch late permission prompt acceptances (user read dialog for >8s)
+    const lateRetryTimer = setTimeout(() => {
+      navigator.geolocation.getCurrentPosition(
+        handlePos,
+        () => {},
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+      );
+    }, 8500);
+
+    return () => {
+      clearTimeout(lateRetryTimer);
+      if (globalWatchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(globalWatchIdRef.current);
+        globalWatchIdRef.current = null;
+      }
+    };
   }, []);
 
   // Timer for active route
@@ -86,110 +183,125 @@ export const LatidosProvider = ({ children }) => {
 
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
 
-    routeWatchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude: lat, longitude: lon, accuracy, speed } = pos.coords;
-        const now = Date.now();
-        const newPoint = { lat, lon };
+    const handleRoutePosition = (pos) => {
+      const { latitude: lat, longitude: lon, accuracy, speed } = pos.coords;
+      const now = Date.now();
+      const newPoint = { lat, lon };
 
-        // Discard inaccurate GPS readings (> 40 meters)
-        if (typeof accuracy === 'number' && accuracy > 40) {
-          return;
+      // Rolling window for GPS smoothing
+      routeRecentReadingsRef.current.push({ lat, lon, time: now });
+      if (routeRecentReadingsRef.current.length > 5) {
+        routeRecentReadingsRef.current.shift();
+      }
+
+      let speedKmh = 0;
+      if (typeof speed === 'number' && speed >= 0.2) {
+        speedKmh = speed * 3.6;
+      } else if (routeRecentReadingsRef.current.length >= 2) {
+        const first = routeRecentReadingsRef.current[0];
+        const last = routeRecentReadingsRef.current[routeRecentReadingsRef.current.length - 1];
+        const dt = (last.time - first.time) / 1000;
+        if (dt >= 1.5) {
+          const d = haversineDistance(first, last);
+          speedKmh = (d / dt) * 3.6;
         }
+      }
 
-        // Rolling window for GPS smoothing
-        routeRecentReadingsRef.current.push({ lat, lon, time: now });
-        if (routeRecentReadingsRef.current.length > 5) {
-          routeRecentReadingsRef.current.shift();
+      speedKmh = Math.min(120, Math.max(0, speedKmh));
+      setCurrentSpeedKmh(speedKmh);
+      setCurrentPosition({ lat, lon, accuracy, speed: speedKmh / 3.6, isReal: true });
+      setHasRealLocation(true);
+
+      // Vehicular speed check (> 20 km/h)
+      if (speedKmh > 20.0) {
+        routeVehicleReadingsCount.current += 1;
+        if (routeVehicleReadingsCount.current >= 2) {
+          setIsVehicleDetected(true);
         }
-
-        let speedKmh = 0;
-        if (typeof speed === 'number' && speed >= 0.2) {
-          speedKmh = speed * 3.6;
-        } else if (routeRecentReadingsRef.current.length >= 2) {
-          const first = routeRecentReadingsRef.current[0];
-          const last = routeRecentReadingsRef.current[routeRecentReadingsRef.current.length - 1];
-          const dt = (last.time - first.time) / 1000;
-          if (dt >= 1.5) {
-            const d = haversineDistance(first, last);
-            speedKmh = (d / dt) * 3.6;
-          }
+        routeLastPointRef.current = newPoint;
+        routeLastTimeRef.current = now;
+        return;
+      } else {
+        if (routeVehicleReadingsCount.current > 0) {
+          routeVehicleReadingsCount.current -= 1;
         }
-
-        speedKmh = Math.min(120, Math.max(0, speedKmh));
-        setCurrentSpeedKmh(speedKmh);
-        setCurrentPosition({ lat, lon, accuracy, speed: speedKmh / 3.6 });
-
-        // Vehicular speed check (> 20 km/h)
-        if (speedKmh > 20.0) {
-          routeVehicleReadingsCount.current += 1;
-          if (routeVehicleReadingsCount.current >= 2) {
-            setIsVehicleDetected(true);
-          }
-          routeLastPointRef.current = newPoint;
-          routeLastTimeRef.current = now;
-          return;
-        } else {
-          if (routeVehicleReadingsCount.current > 0) {
-            routeVehicleReadingsCount.current -= 1;
-          }
-          if (routeVehicleReadingsCount.current === 0) {
-            setIsVehicleDetected(false);
-          }
+        if (routeVehicleReadingsCount.current === 0) {
+          setIsVehicleDetected(false);
         }
+      }
 
-        setRoutePath(prev => [...prev, newPoint]);
+      // Odometry filter: discard low-accuracy readings (> 80 meters) for distance accumulation
+      if (typeof accuracy === 'number' && accuracy > 80) {
+        return;
+      }
 
-        if (routeLastPointRef.current) {
-          const dist = haversineDistance(routeLastPointRef.current, newPoint);
-          // Filter out indoor GPS drift while sitting/in chair (require genuine pedestrian displacement)
-          const isWalkingDisplacement = (dist >= 3.0 && dist < 60) && (speedKmh >= 1.2 || dist >= 4.5);
-          if (isWalkingDisplacement) {
-            setRouteDistanceM(prevDist => {
-              const nextDist = prevDist + dist;
-              
-              // Real-time steps calculation and synchronization
-              const totalRouteSteps = Math.round(nextDist * 1.312);
-              const stepsDelta = totalRouteSteps - lastRouteStepsAwardedRef.current;
-              
-              if (stepsDelta > 0) {
-                lastRouteStepsAwardedRef.current = totalRouteSteps;
-                setSteps(prevSteps => {
-                  const updatedTotalSteps = prevSteps + stepsDelta;
-                  const uid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
-                  if (uid) {
-                    supabaseService.updateUser(uid, { steps_today: updatedTotalSteps }).catch(console.error);
-                  }
-                  return updatedTotalSteps;
-                });
+      setRoutePath(prev => [...prev, newPoint]);
 
-                // Cumulative Latidos gain (1 Latido every 100 steps)
-                const totalRouteLatidos = Math.floor(totalRouteSteps / 100);
-                const latidosToAward = totalRouteLatidos - lastRouteLatidosAwardedRef.current;
-                if (latidosToAward > 0) {
-                  lastRouteLatidosAwardedRef.current = totalRouteLatidos;
-                  ganarLatidos(latidosToAward);
-                  const uid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
-                  if (uid) {
-                    const fecha = new Date().toISOString().slice(0, 10);
-                    supabaseService.upsertActivity(uid, fecha, totalRouteSteps, latidosToAward).catch(console.error);
-                  }
+      if (routeLastPointRef.current) {
+        const dist = haversineDistance(routeLastPointRef.current, newPoint);
+        // Filter out indoor GPS drift while sitting/in chair (require genuine pedestrian displacement)
+        const isWalkingDisplacement = (dist >= 2.5 && dist < 50) && (speedKmh >= 1.0 || dist >= 4.0);
+        if (isWalkingDisplacement) {
+          setRouteDistanceM(prevDist => {
+            const nextDist = prevDist + dist;
+            
+            // Real-time steps calculation and synchronization
+            const totalRouteSteps = Math.round(nextDist * 1.312);
+            const stepsDelta = totalRouteSteps - lastRouteStepsAwardedRef.current;
+            
+            if (stepsDelta > 0) {
+              lastRouteStepsAwardedRef.current = totalRouteSteps;
+              setSteps(prevSteps => {
+                const updatedTotalSteps = prevSteps + stepsDelta;
+                const uid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
+                if (uid) {
+                  supabaseService.updateUser(uid, { steps_today: updatedTotalSteps }).catch(console.error);
+                }
+                return updatedTotalSteps;
+              });
+
+              // Cumulative Latidos gain (1 Latido every 100 steps)
+              const totalRouteLatidos = Math.floor(totalRouteSteps / 100);
+              const latidosToAward = totalRouteLatidos - lastRouteLatidosAwardedRef.current;
+              if (latidosToAward > 0) {
+                lastRouteLatidosAwardedRef.current = totalRouteLatidos;
+                ganarLatidos(latidosToAward);
+                const uid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
+                if (uid) {
+                  const fecha = new Date().toISOString().slice(0, 10);
+                  supabaseService.upsertActivity(uid, fecha, totalRouteSteps, latidosToAward).catch(console.error);
                 }
               }
+            }
 
-              return nextDist;
-            });
-            routeLastPointRef.current = newPoint;
-            routeLastTimeRef.current = now;
-          }
-        } else {
+            return nextDist;
+          });
           routeLastPointRef.current = newPoint;
           routeLastTimeRef.current = now;
         }
-      },
-      (err) => console.warn('Geolocation error:', err),
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
-    );
+      } else {
+        routeLastPointRef.current = newPoint;
+        routeLastTimeRef.current = now;
+      }
+    };
+
+    const startRouteWatcher = (highAccuracy = true) => {
+      if (routeWatchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(routeWatchIdRef.current);
+      }
+      routeWatchIdRef.current = navigator.geolocation.watchPosition(
+        handleRoutePosition,
+        (err) => {
+          console.warn('Route Geolocation notice:', err?.message || err);
+          if (highAccuracy && (err.code === 3 || err.code === 2)) {
+            startRouteWatcher(false);
+          }
+        },
+        { enableHighAccuracy: highAccuracy, maximumAge: 2000, timeout: highAccuracy ? 15000 : 10000 }
+      );
+    };
+
+    startRouteWatcher(true);
 
     return () => {
       if (routeWatchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
@@ -1291,9 +1403,15 @@ export const LatidosProvider = ({ children }) => {
       fetchRecommendedRoutes, addRecommendedRoute, updateRecommendedRoute, deleteRecommendedRoute,
       // Active Route Session (persists across tabs)
       isRouteActive, isRouteTracking, routeElapsed, routeDistanceM, routePath, routePoints,
-      replicatedRoute, isVehicleDetected, currentSpeedKmh, currentPosition,
+      replicatedRoute, isVehicleDetected, currentSpeedKmh, currentPosition, hasRealLocation,
       startRouteSession, pauseRouteSession, resumeRouteSession, discardRouteSession,
       addRouteCheckpoint, editRouteCheckpoint, removeRouteCheckpoint, finishRouteSession,
+      // Global Pedometer Controls (persists across navigation tabs)
+      isTracking: isStepTracking, isStepTracking,
+      startTracking: startStepTracking, startStepTracking,
+      stopTracking: stopStepTracking, stopStepTracking,
+      alertMsg: stepAlertMsg, setAlertMsg: setStepAlertMsg,
+      isSupported: isStepSupported,
       login, logout, loginUser, registerUser,
       fetchAdminStats, fetchAdminUsers, createUser, fetchComercios, createComercio, updateComercio,
       deleteComercio, updateUser, deleteUser, validarBono, rechazarBono, fetchComercioStats, updateComercioBonos,
