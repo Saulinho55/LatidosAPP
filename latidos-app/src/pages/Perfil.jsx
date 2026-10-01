@@ -688,7 +688,7 @@ const Perfil = () => {
           <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e', display: 'inline-block' }}></span>
           <span style={{ fontWeight: '600', color: 'var(--color-text)' }}>Latidos</span>
           <span style={{ opacity: 0.5 }}>•</span>
-          <span style={{ fontWeight: '700', color: 'var(--color-accent)' }}>Versión 1.0.0</span>
+          <span style={{ fontWeight: '700', color: 'var(--color-accent)' }}>Beta - V1.0.2</span>
         </div>
       </div>
     </div>

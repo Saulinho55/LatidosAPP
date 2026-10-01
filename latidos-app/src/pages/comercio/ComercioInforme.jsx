@@ -19,7 +19,7 @@ const ComercioInforme = () => {
       const data = await fetchComercioStats();
       if (data && data.transactions) {
         const now = new Date();
-        const currentMonthStr = now.toISOString().slice(0, 7); // YYYY-MM
+        const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM
         
         // Filter transactions for current month
         const monthTxs = data.transactions.filter(t => t.fecha && t.fecha.startsWith(currentMonthStr));

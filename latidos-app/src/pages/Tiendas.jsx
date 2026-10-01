@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import { useLatidos } from '../context/LatidosContext';
 import { useStepCounter } from '../hooks/useStepCounter';
 import { getComerciosProductsList } from '../data/defaultProducts';
+import { getLocalDateStr } from '../utils/dateUtils';
 
 // Fix Leaflet default icon missing in bundlers
 delete L.Icon.Default.prototype._getIconUrl;
@@ -66,7 +67,7 @@ const isShopOnVacation = (comercio) => {
   if (!vac) return false;
   if (vac.activo) return true;
   if (vac.inicio && vac.fin) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDateStr();
     return today >= vac.inicio && today <= vac.fin;
   }
   return false;
@@ -86,7 +87,7 @@ const getActiveNotice = (comercio) => {
     const texto = (av.texto || '').trim();
     if (!texto) return null;
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDateStr();
     if (av.inicio && today < av.inicio) return null;
     if (av.fin && today > av.fin) return null;
 

@@ -466,27 +466,6 @@ export const supabaseService = {
       comercio = data;
     }
 
-    // Special handling for demo test code LAT-2024
-    if (cleanCode === 'LAT-2024') {
-      const comNombre = comercio?.nombre || 'Frutería La Majorera';
-      const nextId = await getNextId('transactions');
-      const payload = {
-        id: nextId,
-        user_id: 1,
-        comercio_nombre: comNombre,
-        comercio_emoji: comercio?.emoji || '🏪',
-        code: 'LAT-2024',
-        latidos_usados: 100,
-        descuento: parseFloat(comercio?.descuento) || 2,
-        importe_compra: parseFloat(importe) || 0,
-        fecha: new Date().toISOString()
-      };
-      try {
-        await supabase.from('transactions').insert([payload]);
-      } catch (e) {}
-      return payload;
-    }
-
     // Search transaction by code (case-insensitive)
     const { data: txList, error: txErr } = await supabase
       .from('transactions')
@@ -500,15 +479,15 @@ export const supabaseService = {
 
     const tx = txList[0];
 
-    // Normalize strings for robust matching
+    // Normalize strings for strict, secure matching
     const normalize = (str) => (str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
     
     if (comercio && !isAdmin) {
       const comNorm = normalize(comercio.nombre);
       const txNorm = normalize(tx.comercio_nombre);
       
-      const isMatch = txNorm === comNorm || txNorm.includes(comNorm) || comNorm.includes(txNorm);
-      if (!isMatch) {
+      const isExactMatch = txNorm === comNorm;
+      if (!isExactMatch) {
         throw new Error(`Este código pertenece a "${tx.comercio_nombre}", no a "${comercio.nombre}".`);
       }
     }
@@ -580,7 +559,8 @@ export const supabaseService = {
 
     if (updateErr) throw updateErr;
 
-    // 2. Refund latidos to the customer in Supabase
+    // 2. Refund latidos to customer atomically in Supabase
+    let nextLatidos = null;
     if (tx.user_id && originalLatidos > 0) {
       const { data: customer } = await supabase
         .from('users')
@@ -589,7 +569,7 @@ export const supabaseService = {
         .maybeSingle();
 
       if (customer) {
-        const nextLatidos = (customer.latidos || 0) + originalLatidos;
+        nextLatidos = (customer.latidos || 0) + originalLatidos;
         await supabase
           .from('users')
           .update({ latidos: nextLatidos })
@@ -597,7 +577,14 @@ export const supabaseService = {
       }
     }
 
-    return updated || { ...tx, importe_compra: 0, latidos_usados: 0, descuento: 0 };
+    return {
+      ...(updated || tx),
+      importe_compra: 0,
+      latidos_usados: 0,
+      descuento: 0,
+      newLatidos,
+      refundedAmount: originalLatidos
+    };
   },
 
   // ── Routes ──

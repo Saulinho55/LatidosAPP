@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { supabaseService } from '../services/supabaseService';
 import { haversineDistance } from '../hooks/useGeolocation';
 import { useStepCounter } from '../hooks/useStepCounter';
+import { getLocalDateStr, computeWeeklyStepsFromActivity, computeStreakFromActivity } from '../utils/dateUtils';
 import { t } from '../i18n';
 
 const LatidosContext = createContext(null);
@@ -268,7 +269,7 @@ export const LatidosProvider = ({ children }) => {
                 ganarLatidos(latidosToAward);
                 const uid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
                 if (uid) {
-                  const fecha = new Date().toISOString().slice(0, 10);
+                  const fecha = getLocalDateStr();
                   supabaseService.upsertActivity(uid, fecha, totalRouteSteps, latidosToAward).catch(console.error);
                 }
               }
@@ -357,15 +358,48 @@ export const LatidosProvider = ({ children }) => {
           role: supaUser.role || 'user',
           comercio_id: supaUser.comercio_id
         });
+        // Fetch transactions, routes, activity from Supabase
+        const [supaTx, supaRoutes, supaAct] = await Promise.allSettled([
+          supabaseService.getTransactions(uid),
+          supabaseService.getRoutes(uid),
+          supabaseService.getActivity(uid)
+        ]);
+
+        if (supaTx.status === 'fulfilled') setTransactions(supaTx.value);
+        if (supaRoutes.status === 'fulfilled') setSavedRoutes(supaRoutes.value);
+
+        const loadedActivities = supaAct.status === 'fulfilled' && Array.isArray(supaAct.value) ? supaAct.value : [];
+        setActivity(loadedActivities);
+
+        // Strict local date matching: only show steps if recorded on TODAY's local date
+        const todayStr = getLocalDateStr();
+        const todayAct = loadedActivities.find(a => (a.fecha || '').split('T')[0] === todayStr);
+        const actualTodaySteps = todayAct && typeof todayAct.pasos === 'number' ? todayAct.pasos : 0;
+
+        setSteps(actualTodaySteps);
+        prevPedometerStepsRef.current = actualTodaySteps;
+        resetPedometerSteps(actualTodaySteps);
+
+        // Fix database if steps_today was leftover from yesterday
+        if (supaUser.steps_today !== actualTodaySteps) {
+          supabaseService.updateUser(uid, { steps_today: actualTodaySteps }).catch(console.error);
+        }
+
+        const goal = supaUser.daily_goal || 10000;
+        setDailyGoal(goal);
+
+        // Compute real weekly steps from actual historical activity
+        const calculatedWeekly = computeWeeklyStepsFromActivity(loadedActivities, actualTodaySteps);
+        setWeeklySteps(calculatedWeekly);
+
+        // Compute streak dynamically
+        const calculatedStreak = computeStreakFromActivity(loadedActivities, actualTodaySteps, goal);
+        setRacha(calculatedStreak);
+        if (supaUser.racha !== calculatedStreak) {
+          supabaseService.updateUser(uid, { racha: calculatedStreak }).catch(console.error);
+        }
+
         setLatidos(supaUser.latidos || 0);
-        setSteps(supaUser.steps_today || 0);
-        setRacha(supaUser.racha || 0);
-        setDailyGoal(supaUser.daily_goal || 10000);
-        setWeeklySteps(
-          typeof supaUser.weekly_steps === 'string'
-            ? JSON.parse(supaUser.weekly_steps || '[0,0,0,0,0,0,0]')
-            : (supaUser.weekly_steps || [0,0,0,0,0,0,0])
-        );
 
         // Fetch user preferences
         const supaPrefs = await supabaseService.getPreferences(uid);
@@ -390,17 +424,6 @@ export const LatidosProvider = ({ children }) => {
             currency: currentCurr
           }).catch(console.error);
         }
-
-        // Fetch transactions, routes, activity from Supabase
-        const [supaTx, supaRoutes, supaAct] = await Promise.allSettled([
-          supabaseService.getTransactions(uid),
-          supabaseService.getRoutes(uid),
-          supabaseService.getActivity(uid)
-        ]);
-
-        if (supaTx.status === 'fulfilled') setTransactions(supaTx.value);
-        if (supaRoutes.status === 'fulfilled') setSavedRoutes(supaRoutes.value);
-        if (supaAct.status === 'fulfilled') setActivity(supaAct.value);
       } else {
         // If user not found in Supabase (e.g. deleted from cloud)
         logout();
@@ -417,7 +440,7 @@ export const LatidosProvider = ({ children }) => {
   }, [theme]);
 
   const ganarLatidos = async (cantidad) => {
-    const num = Number(cantidad) || 0;
+    const num = Math.min(500, Math.max(0, Math.floor(Number(cantidad) || 0)));
     if (num <= 0) return;
     setLatidos(prev => {
       const next = prev + num;
@@ -427,11 +450,11 @@ export const LatidosProvider = ({ children }) => {
       return next;
     });
 
-    const fecha = new Date().toISOString().slice(0, 10);
+    const fecha = getLocalDateStr();
     setActivity(prev => {
-      const exists = prev.some(a => a.fecha === fecha);
+      const exists = prev.some(a => (a.fecha || '').split('T')[0] === fecha);
       if (exists) {
-        return prev.map(a => a.fecha === fecha ? {
+        return prev.map(a => (a.fecha || '').split('T')[0] === fecha ? {
           ...a,
           latidos_ganados: Math.max(Math.floor((a.pasos || steps || 0) / 100), (a.latidos_ganados || 0) + num)
         } : a);
@@ -477,15 +500,19 @@ export const LatidosProvider = ({ children }) => {
 
     try {
       await supabaseService.updateUser(targetUid, { steps_today: stepsToSave });
-      const fecha = new Date().toISOString().slice(0, 10);
+      const fecha = getLocalDateStr();
       const updatedAct = await supabaseService.upsertActivity(targetUid, fecha, stepsToSave, 0);
       if (updatedAct) {
         setActivity(prev => {
-          const exists = prev.some(a => a.id === updatedAct.id);
-          if (exists) {
-            return prev.map(a => a.id === updatedAct.id ? updatedAct : a);
-          }
-          return [updatedAct, ...prev];
+          const cleanDate = (updatedAct.fecha || '').split('T')[0];
+          const exists = prev.some(a => (a.fecha || '').split('T')[0] === cleanDate);
+          const nextActivities = exists
+            ? prev.map(a => (a.fecha || '').split('T')[0] === cleanDate ? updatedAct : a)
+            : [updatedAct, ...prev];
+
+          setWeeklySteps(computeWeeklyStepsFromActivity(nextActivities, stepsToSave));
+          setRacha(computeStreakFromActivity(nextActivities, stepsToSave, dailyGoal));
+          return nextActivities;
         });
       }
     } catch (e) {
@@ -527,6 +554,35 @@ export const LatidosProvider = ({ children }) => {
       }
     };
   }, [userId, user]);
+
+  // Midnight rollover watcher: resets daily steps when crossing 00:00 local time
+  useEffect(() => {
+    let lastKnownDate = getLocalDateStr();
+
+    const checkMidnight = () => {
+      const currentDate = getLocalDateStr();
+      if (currentDate !== lastKnownDate) {
+        lastKnownDate = currentDate;
+        setSteps(0);
+        resetPedometerSteps(0);
+        prevPedometerStepsRef.current = 0;
+
+        const targetUid = userId || user?.id || parseInt(localStorage.getItem('latidos_user_id'), 10);
+        if (targetUid) {
+          supabaseService.updateUser(targetUid, { steps_today: 0 }).catch(console.error);
+          supabaseService.getActivity(targetUid).then(acts => {
+            const list = acts || [];
+            setActivity(list);
+            setWeeklySteps(computeWeeklyStepsFromActivity(list, 0));
+            setRacha(computeStreakFromActivity(list, 0, dailyGoal));
+          }).catch(console.error);
+        }
+      }
+    };
+
+    const intervalId = setInterval(checkMidnight, 15000);
+    return () => clearInterval(intervalId);
+  }, [userId, user, dailyGoal, resetPedometerSteps]);
 
   const [activeCode, setActiveCode] = useState(() => {
     try {
@@ -586,25 +642,28 @@ export const LatidosProvider = ({ children }) => {
       return;
     }
 
-    // Cancel in Supabase so merchant's screen updates immediately
+    // Cancel in Supabase and process atomic refund without double increment
+    let refundedBalance = null;
     try {
-      await supabaseService.rechazarBono(code);
+      const res = await supabaseService.rechazarBono(code);
+      if (res && typeof res.newLatidos === 'number') {
+        refundedBalance = res.newLatidos;
+        setLatidos(res.newLatidos);
+      }
     } catch (e) {
       console.error('Error cancelling bono in Supabase:', e);
     }
 
-    if (refundAmount > 0 && currentUid) {
-      setLatidos(prev => {
-        const next = prev + refundAmount;
-        supabaseService.updateUser(currentUid, { latidos: next }).catch(console.error);
-        return next;
-      });
-
-      if (currentUid) {
-        supabaseService.getTransactions(currentUid)
-          .then(txs => setTransactions(txs))
-          .catch(console.error);
+    if (currentUid) {
+      if (refundedBalance === null) {
+        supabaseService.getUserById(currentUid).then(u => {
+          if (u && typeof u.latidos === 'number') setLatidos(u.latidos);
+        }).catch(console.error);
       }
+
+      supabaseService.getTransactions(currentUid)
+        .then(txs => setTransactions(txs))
+        .catch(console.error);
     }
 
     if (reason === 'cancelled') {
@@ -656,10 +715,6 @@ export const LatidosProvider = ({ children }) => {
         localStorage.removeItem('latidos_active_code');
         const shopName = tx.comercio_nombre || activeCode.comercioNombre || 'el comercio';
         const refundPts = Number(activeCode.latidosUsados) || 0;
-
-        if (refundPts > 0) {
-          setLatidos(prev => prev + refundPts);
-        }
 
         setActiveCodeNotification(`Bono ${cleanCode} cancelado por ${shopName}. Se te han devuelto ${refundPts} Latidos.`);
 
@@ -768,8 +823,23 @@ export const LatidosProvider = ({ children }) => {
     const ok = canjearLatidos(latidosRequeridos);
     if (!ok) return { success: false, error: 'Error al canjear latidos' };
 
-    const num = Math.floor(1000 + Math.random() * 9000);
-    const code = `LAT-${num}`;
+    // High entropy cryptographic code generator (6 alphanumeric chars, zero collisions)
+    const generateSecureCode = () => {
+      const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      const array = new Uint8Array(6);
+      if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+        window.crypto.getRandomValues(array);
+      } else {
+        for (let i = 0; i < 6; i++) array[i] = Math.floor(Math.random() * 256);
+      }
+      let codeStr = '';
+      for (let i = 0; i < 6; i++) {
+        codeStr += charset[array[i] % charset.length];
+      }
+      return `LAT-${codeStr}`;
+    };
+
+    const code = generateSecureCode();
     const now = Date.now();
     const expiresAt = now + 600 * 1000; // 10 minutes
 
@@ -956,8 +1026,8 @@ export const LatidosProvider = ({ children }) => {
         if (targetRes.role === 'superadmin' && user?.role !== 'superadmin') {
           return { success: false, error: 'Los administradores no pueden modificar a un SuperAdministrador.' };
         }
-        if (userData.role === 'superadmin' && user?.role !== 'superadmin') {
-          return { success: false, error: 'Solo un SuperAdministrador puede otorgar el rol de SuperAdministrador.' };
+        if (userData.role && (userData.role === 'superadmin' || userData.role === 'admin') && user?.role !== 'superadmin') {
+          return { success: false, error: 'Solo un SuperAdministrador puede otorgar roles de Administrador o SuperAdministrador.' };
         }
         const updated = await supabaseService.updateUser(id, userData);
 
@@ -1372,16 +1442,20 @@ export const LatidosProvider = ({ children }) => {
 
   const registrarActividad = async (pasos, latidosGanados) => {
     if (!userId) return;
-    const fecha = new Date().toISOString().slice(0, 10);
+    const fecha = getLocalDateStr();
     try {
       const updatedAct = await supabaseService.upsertActivity(userId, fecha, pasos, latidosGanados);
       if (updatedAct) {
         setActivity(prev => {
-          const exists = prev.some(a => a.id === updatedAct.id);
-          if (exists) {
-            return prev.map(a => a.id === updatedAct.id ? updatedAct : a);
-          }
-          return [updatedAct, ...prev];
+          const cleanDate = (updatedAct.fecha || '').split('T')[0];
+          const exists = prev.some(a => (a.fecha || '').split('T')[0] === cleanDate);
+          const nextActs = exists
+            ? prev.map(a => (a.fecha || '').split('T')[0] === cleanDate ? updatedAct : a)
+            : [updatedAct, ...prev];
+
+          setWeeklySteps(computeWeeklyStepsFromActivity(nextActs, steps));
+          setRacha(computeStreakFromActivity(nextActs, steps, dailyGoal));
+          return nextActs;
         });
       }
     } catch (e) {

@@ -22,6 +22,8 @@ export const t = {
 
     // Home / StepsCard / Racha / StepChart
     pasosHoy: 'Pasos hoy',
+    hoy: 'Hoy',
+    ayer: 'Ayer',
     objetivo: 'Objetivo',
     deObjetivo: 'de',
     iniciar: 'Iniciar',
@@ -154,6 +156,8 @@ export const t = {
 
     // Home / StepsCard / Racha / StepChart
     pasosHoy: 'Steps today',
+    hoy: 'Today',
+    ayer: 'Yesterday',
     objetivo: 'Goal',
     deObjetivo: 'of',
     iniciar: 'Start',

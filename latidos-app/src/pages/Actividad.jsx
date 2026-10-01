@@ -1,47 +1,53 @@
 import React from 'react';
 import { useLatidos } from '../context/LatidosContext';
+import { getLocalDateStr, formatDisplayDate } from '../utils/dateUtils';
 
 const Actividad = () => {
-  const { activity, steps, currency, tr } = useLatidos();
+  const { activity, steps, tr } = useLatidos();
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getLocalDateStr();
 
-  const formatFecha = (fechaStr) => {
-    if (!fechaStr) return 'Hoy';
-    if (fechaStr === todayStr) {
-      const d = new Date();
-      return `Hoy, ${d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+  // Deduplicate and sanitize activity records
+  const activityMap = new Map();
+  (activity || []).forEach(a => {
+    if (!a || !a.fecha) return;
+    const cleanDate = a.fecha.split('T')[0];
+    const prev = activityMap.get(cleanDate);
+    const currentPasos = a.pasos || 0;
+    const currentLatidos = Math.max(a.latidos_ganados || 0, Math.floor(currentPasos / 100));
+
+    if (!prev) {
+      activityMap.set(cleanDate, {
+        id: a.id || `act-${cleanDate}`,
+        fecha: cleanDate,
+        pasos: currentPasos,
+        latidos_ganados: currentLatidos
+      });
+    } else {
+      activityMap.set(cleanDate, {
+        ...prev,
+        pasos: Math.max(prev.pasos, currentPasos),
+        latidos_ganados: Math.max(prev.latidos_ganados, currentLatidos)
+      });
     }
-    const d = new Date(fechaStr + 'T00:00:00');
-    if (isNaN(d.getTime())) return fechaStr;
-    return d.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-  };
-
-  // Combine historical activity with live today's steps and accurate Latidos
-  let displayActivity = (activity || []).map(a => {
-    const p = a.pasos || 0;
-    const l = Math.max(a.latidos_ganados || 0, Math.floor(p / 100));
-    return { ...a, pasos: p, latidos_ganados: l };
   });
 
-  const todayIndex = displayActivity.findIndex(a => a.fecha === todayStr);
-
-  if (todayIndex >= 0) {
-    const livePasos = Math.max(displayActivity[todayIndex].pasos || 0, steps || 0);
-    const liveLatidos = Math.max(displayActivity[todayIndex].latidos_ganados || 0, Math.floor(livePasos / 100));
-    displayActivity[todayIndex] = {
-      ...displayActivity[todayIndex],
-      pasos: livePasos,
-      latidos_ganados: liveLatidos
-    };
-  } else if ((steps || 0) > 0) {
-    displayActivity.unshift({
-      id: 'today-live',
+  // If there are live steps recorded today, merge with today's record
+  const effectiveLiveSteps = steps || 0;
+  if (effectiveLiveSteps > 0) {
+    const todayRecord = activityMap.get(todayStr);
+    const combinedPasos = Math.max(todayRecord ? todayRecord.pasos : 0, effectiveLiveSteps);
+    const combinedLatidos = Math.max(todayRecord ? todayRecord.latidos_ganados : 0, Math.floor(combinedPasos / 100));
+    activityMap.set(todayStr, {
+      id: todayRecord ? todayRecord.id : 'today-live',
       fecha: todayStr,
-      pasos: steps,
-      latidos_ganados: Math.floor((steps || 0) / 100)
+      pasos: combinedPasos,
+      latidos_ganados: combinedLatidos
     });
   }
+
+  // Convert map to sorted array descending by date
+  const displayActivity = Array.from(activityMap.values()).sort((a, b) => b.fecha.localeCompare(a.fecha));
 
   const totalPasos = displayActivity.reduce((s, a) => s + (a.pasos || 0), 0);
   const totalLatidos = displayActivity.reduce((s, a) => s + (a.latidos_ganados || 0), 0);
@@ -79,7 +85,7 @@ const Actividad = () => {
         </div>
       </div>
 
-      {/* Lista */}
+      {/* Activity List */}
       <div style={{ padding: '0 1rem' }}>
         {displayActivity.length === 0 ? (
           <p style={{
@@ -93,7 +99,7 @@ const Actividad = () => {
           </p>
         ) : (
           displayActivity.map((item) => (
-            <div key={item.id} style={{
+            <div key={item.id || item.fecha} style={{
               backgroundColor: 'var(--color-card)',
               borderRadius: '1rem',
               padding: '1rem 1.2rem',
@@ -112,7 +118,7 @@ const Actividad = () => {
                   marginBottom: '0.2rem',
                   textTransform: 'capitalize'
                 }}>
-                  {formatFecha(item.fecha)}
+                  {formatDisplayDate(item.fecha, tr)}
                 </p>
                 <p style={{
                   fontFamily: 'var(--font-display)',
