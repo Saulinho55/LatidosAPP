@@ -23,6 +23,7 @@ import ComercioProductos from './pages/comercio/ComercioProductos';
 import ComercioHorario from './pages/comercio/ComercioHorario';
 import ComercioInforme from './pages/comercio/ComercioInforme';
 import SplashScreen from './components/SplashScreen';
+import WelcomeAuthModal from './components/WelcomeAuthModal';
 
 const PermissionsModal = () => {
   const [show, setShow] = useState(false);
@@ -80,8 +81,9 @@ function App() {
           minHeight: '100vh',
           position: 'relative'
         }}>
-          <SplashScreen minDuration={2800} />
+          <SplashScreen minDuration={4000} />
           <PermissionsModal />
+          <WelcomeAuthModal />
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/rutas" element={<RutasPage />} />

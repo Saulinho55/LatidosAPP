@@ -2,45 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLatidos } from '../context/LatidosContext';
 import splashVideo from '../assets/logolatidosinicio.mp4';
 
-const SplashScreen = ({ minDuration = 2500, maxDuration = 5000 }) => {
+const SplashScreen = ({ minDuration = 4000, maxDuration = 7000 }) => {
   const { loading } = useLatidos() || {};
   const [visible, setVisible] = useState(true);
   const [fading, setFading] = useState(false);
-  const [videoLoaded, setVideoLoaded] = useState(false);
+  const startTimeRef = useRef(Date.now());
   const videoRef = useRef(null);
-
-  useEffect(() => {
-    let minTimer;
-    let maxTimer;
-
-    // Minimum time the splash is shown to enjoy the animation
-    minTimer = setTimeout(() => {
-      // If data is already loaded or not blocked, start fade out
-      if (!loading) {
-        startFadeOut();
-      }
-    }, minDuration);
-
-    // Safety timeout so user is never stuck if something takes too long
-    maxTimer = setTimeout(() => {
-      startFadeOut();
-    }, maxDuration);
-
-    return () => {
-      clearTimeout(minTimer);
-      clearTimeout(maxTimer);
-    };
-  }, [minDuration, maxDuration, loading]);
-
-  // If loading just finished after minDuration
-  useEffect(() => {
-    if (!loading && videoLoaded) {
-      const t = setTimeout(() => {
-        startFadeOut();
-      }, 1000);
-      return () => clearTimeout(t);
-    }
-  }, [loading, videoLoaded]);
 
   const startFadeOut = () => {
     setFading(true);
@@ -48,6 +15,22 @@ const SplashScreen = ({ minDuration = 2500, maxDuration = 5000 }) => {
       setVisible(false);
     }, 550);
   };
+
+  useEffect(() => {
+    // Strictly wait at least minDuration (4000ms minimum) before allowing fade out
+    const checkTimer = setInterval(() => {
+      const elapsed = Date.now() - startTimeRef.current;
+      if (elapsed >= minDuration) {
+        if (!loading || elapsed >= maxDuration) {
+          clearInterval(checkTimer);
+          startFadeOut();
+        }
+      }
+    }, 150);
+
+    return () => clearInterval(checkTimer);
+  }, [minDuration, maxDuration, loading]);
+
 
   // Attempt to play video immediately
   useEffect(() => {

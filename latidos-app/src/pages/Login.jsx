@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useLatidos } from '../context/LatidosContext';
 import GoogleReCaptcha from '../components/GoogleReCaptcha';
 import latidosIcon from '../assets/latidos_icon.png';
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { loginUser, registerUser, isAuthenticated, theme } = useLatidos();
   
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(() => Boolean(location.state?.register));
   const [isLoading, setIsLoading] = useState(false);
   
   // Form fields
