@@ -582,7 +582,7 @@ export const supabaseService = {
       importe_compra: 0,
       latidos_usados: 0,
       descuento: 0,
-      newLatidos,
+      newLatidos: nextLatidos,
       refundedAmount: originalLatidos
     };
   },
@@ -834,11 +834,21 @@ export const supabaseService = {
   },
 
   async upsertActivity(userId, fecha, pasos, latidosGanados) {
+    // Search using both exact match AND date-prefix match (handles timestamp columns)
+    const nextDay = (() => {
+      const [y, m, d] = fecha.split('-').map(Number);
+      const dt = new Date(y, m - 1, d + 1);
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    })();
+
     const { data: existing } = await supabase
       .from('activity')
       .select('*')
       .eq('user_id', userId)
-      .eq('fecha', fecha)
+      .gte('fecha', fecha)
+      .lt('fecha', nextDay)
+      .order('id', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (existing) {
@@ -867,6 +877,7 @@ export const supabaseService = {
       return data;
     }
   },
+
 
   // ── Admin Stats ──
   async getAdminStats() {

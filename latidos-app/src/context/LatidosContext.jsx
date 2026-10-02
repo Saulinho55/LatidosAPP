@@ -405,20 +405,29 @@ export const LatidosProvider = ({ children }) => {
     });
 
     const fecha = getLocalDateStr();
+    // Use functional update to avoid stale `steps` closure
     setActivity(prev => {
       const exists = prev.some(a => (a.fecha || '').split('T')[0] === fecha);
       if (exists) {
-        return prev.map(a => (a.fecha || '').split('T')[0] === fecha ? {
-          ...a,
-          latidos_ganados: Math.max(Math.floor((a.pasos || steps || 0) / 100), (a.latidos_ganados || 0) + num)
-        } : a);
+        return prev.map(a => {
+          if ((a.fecha || '').split('T')[0] !== fecha) return a;
+          const currentPasos = a.pasos || 0;
+          const newLatidosGanados = Math.max(Math.floor(currentPasos / 100), (a.latidos_ganados || 0) + num);
+          return { ...a, latidos_ganados: newLatidosGanados };
+        });
       } else {
-        return [{ id: `act-${Date.now()}`, fecha, pasos: steps || 0, latidos_ganados: num }, ...prev];
+        return [{ id: `act-${Date.now()}`, fecha, pasos: 0, latidos_ganados: num }, ...prev];
       }
     });
 
     if (userId) {
-      supabaseService.upsertActivity(userId, fecha, steps || 0, num).catch(console.error);
+      // Fetch current steps from DB so upsertActivity has accurate pasos value
+      supabaseService.getUserById(userId).then(u => {
+        const currentPasos = (u && u.steps_today) ? u.steps_today : 0;
+        supabaseService.upsertActivity(userId, fecha, currentPasos, num).catch(console.error);
+      }).catch(() => {
+        supabaseService.upsertActivity(userId, fecha, 0, num).catch(console.error);
+      });
     }
   };
 
