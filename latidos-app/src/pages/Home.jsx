@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import StepsCard from '../components/Stepcards';
@@ -6,6 +6,7 @@ import StreakCard from '../components/Racha';
 import StepChart from '../components/StepChart';
 import NFCConnection from '../components/NFC';
 import { useLatidos } from '../context/LatidosContext';
+import { useStepCounter } from '../hooks/useStepCounter';
 
 const STEPS_PER_LATIDO = 100;
 
@@ -25,44 +26,103 @@ const Home = () => {
     tr,
     isVehicleDetected,
     isRouteActive,
-    isTracking,
-    isSupported,
-    startTracking,
-    stopTracking,
-    alertMsg,
-    setAlertMsg
   } = useLatidos();
-  
+
   const navigate = useNavigate();
 
-  const effectiveSteps = steps || 0;
+  // ── Local pedometer (only counts on this screen) ──
+  const {
+    steps: pedometerSteps,
+    isTracking,
+    isSupported,
+    alertMsg,
+    setAlertMsg,
+    startTracking,
+    stopTracking,
+    resetSteps,
+  } = useStepCounter(steps, { isVehicleDetected });
 
-  React.useEffect(() => {
-    if (isAuthenticated && user?.role === 'comercio') {
-      navigate('/comercio');
+  // Ref to track how many steps we've already synced to DB / awarded latidos for
+  const lastSyncedStepsRef = useRef(steps);
+  const lastAwardedLatidosRef = useRef(Math.floor(steps / STEPS_PER_LATIDO));
+  const latidosAwardPendingRef = useRef(false);
+
+  // When DB steps load (isAuthenticated fires, steps comes from DB), reset pedometer baseline
+  const prevAuthRef = useRef(false);
+  useEffect(() => {
+    if (isAuthenticated && !prevAuthRef.current) {
+      prevAuthRef.current = true;
+      // Sync pedometer starting point to what DB says today's steps are
+      resetSteps(steps);
+      lastSyncedStepsRef.current = steps;
+      lastAwardedLatidosRef.current = Math.floor(steps / STEPS_PER_LATIDO);
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, steps]);
 
-  // Create week data for the chart from user's dynamic weeklySteps array
+  // Main step sync effect: fires when pedometer counts a new step
+  useEffect(() => {
+    if (!isTracking) return;
+    if (pedometerSteps <= lastSyncedStepsRef.current) return;
+
+    const newTotal = pedometerSteps;
+    lastSyncedStepsRef.current = newTotal;
+
+    // Update steps in DB (debounced inside updateSteps)
+    updateSteps(newTotal);
+
+    // Award latidos: 1 latido per 100 steps, cumulative
+    const newLatidosTotal = Math.floor(newTotal / STEPS_PER_LATIDO);
+    const latidosToAward = newLatidosTotal - lastAwardedLatidosRef.current;
+    if (latidosToAward > 0 && !latidosAwardPendingRef.current) {
+      latidosAwardPendingRef.current = true;
+      lastAwardedLatidosRef.current = newLatidosTotal;
+      ganarLatidos(latidosToAward);
+      registrarActividad(newTotal, latidosToAward);
+      latidosAwardPendingRef.current = false;
+    }
+  }, [pedometerSteps, isTracking]);
+
+  // Flush steps to DB on tab hide / app background
+  useEffect(() => {
+    const handleFlush = () => {
+      if (isTracking && pedometerSteps > 0) {
+        updateSteps(pedometerSteps);
+      }
+    };
+    const handleVis = () => { if (document.visibilityState === 'hidden') handleFlush(); };
+    document.addEventListener('visibilitychange', handleVis);
+    window.addEventListener('beforeunload', handleFlush);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVis);
+      window.removeEventListener('beforeunload', handleFlush);
+    };
+  }, [isTracking, pedometerSteps]);
+
+  // ── Week chart ──
+  const effectiveSteps = pedometerSteps || steps || 0;
   const days = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
   const todayIndex = (new Date().getDay() + 6) % 7;
-  
+
   const currentWeekData = days.map((day, index) => {
     let daySteps = isAuthenticated && weeklySteps ? (weeklySteps[index] || 0) : 0;
-    // For today, use today's live steps if they are higher
     if (index === todayIndex) {
       daySteps = Math.max(daySteps, effectiveSteps);
     }
     return { day, steps: daySteps };
   });
 
-
+  // Redirect comercio users
+  useEffect(() => {
+    if (isAuthenticated && user?.role === 'comercio') {
+      navigate('/comercio');
+    }
+  }, [isAuthenticated, user, navigate]);
 
   return (
     <div style={{ paddingBottom: '6rem' }}>
       <Header latidos={latidos} />
 
-      {/* Vehicle Detected Warning Banner (No emojis, exact text) */}
+      {/* Vehicle Detected Warning Banner */}
       {isVehicleDetected && (
         <div style={{
           margin: '0.8rem 1rem 0.2rem',
@@ -94,7 +154,7 @@ const Home = () => {
           </div>
         </div>
       )}
-      
+
       <StepsCard
         pasos={isAuthenticated ? effectiveSteps : 0}
         objetivo={dailyGoal || 10000}
@@ -104,15 +164,15 @@ const Home = () => {
         onStop={stopTracking}
       />
 
-      <StreakCard 
-        dias={isAuthenticated ? racha : 0} 
-        weekData={currentWeekData} 
-        objetivo={dailyGoal || 10000} 
+      <StreakCard
+        dias={isAuthenticated ? racha : 0}
+        weekData={currentWeekData}
+        objetivo={dailyGoal || 10000}
       />
 
-      <StepChart 
-        data={currentWeekData} 
-        objetivo={dailyGoal || 10000} 
+      <StepChart
+        data={currentWeekData}
+        objetivo={dailyGoal || 10000}
       />
 
       <NFCConnection />

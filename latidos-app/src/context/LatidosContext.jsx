@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { supabase } from '../lib/supabase';
 import { supabaseService } from '../services/supabaseService';
 import { haversineDistance } from '../hooks/useGeolocation';
-import { useStepCounter } from '../hooks/useStepCounter';
 import { getLocalDateStr, computeWeeklyStepsFromActivity, computeStreakFromActivity } from '../utils/dateUtils';
 import { t } from '../i18n';
 
@@ -51,49 +50,6 @@ export const LatidosProvider = ({ children }) => {
   const lastRouteLatidosAwardedRef = useRef(0);
   const routeRecentReadingsRef = useRef([]);
   const routeVehicleReadingsCount = useRef(0);
-
-  // ── Global Step Counter (persists across navigation tabs) ──
-  const {
-    steps: pedometerSteps,
-    isTracking: isStepTracking,
-    isSupported: isStepSupported,
-    alertMsg: stepAlertMsg,
-    setAlertMsg: setStepAlertMsg,
-    startTracking: startStepTracking,
-    stopTracking: stopStepTracking,
-    resetSteps: resetPedometerSteps
-  } = useStepCounter(steps, {
-    isVehicleDetected
-  });
-
-  const prevPedometerStepsRef = useRef(steps);
-
-  useEffect(() => {
-    if (!isStepTracking) {
-      prevPedometerStepsRef.current = pedometerSteps;
-      return;
-    }
-
-    if (pedometerSteps > prevPedometerStepsRef.current) {
-      const stepDelta = pedometerSteps - prevPedometerStepsRef.current;
-      setSteps(prev => {
-        const nextSteps = prev + stepDelta;
-        updateSteps(nextSteps);
-        return nextSteps;
-      });
-
-      const oldLatidos = Math.floor(prevPedometerStepsRef.current / 100);
-      const newLatidos = Math.floor(pedometerSteps / 100);
-      const latidosToAward = newLatidos - oldLatidos;
-
-      if (latidosToAward > 0) {
-        ganarLatidos(latidosToAward);
-        registrarActividad(pedometerSteps, latidosToAward);
-      }
-
-      prevPedometerStepsRef.current = pedometerSteps;
-    }
-  }, [pedometerSteps, isStepTracking]);
 
   // ── Resilient Geolocation Initializer & Continuous Watcher ──
   useEffect(() => {
@@ -377,8 +333,6 @@ export const LatidosProvider = ({ children }) => {
         const actualTodaySteps = todayAct && typeof todayAct.pasos === 'number' ? todayAct.pasos : 0;
 
         setSteps(actualTodaySteps);
-        prevPedometerStepsRef.current = actualTodaySteps;
-        resetPedometerSteps(actualTodaySteps);
 
         // Fix database if steps_today was leftover from yesterday
         if (supaUser.steps_today !== actualTodaySteps) {
@@ -564,8 +518,6 @@ export const LatidosProvider = ({ children }) => {
       if (currentDate !== lastKnownDate) {
         lastKnownDate = currentDate;
         setSteps(0);
-        resetPedometerSteps(0);
-        prevPedometerStepsRef.current = 0;
 
         const targetUid = userId || user?.id || parseInt(localStorage.getItem('latidos_user_id'), 10);
         if (targetUid) {
@@ -582,7 +534,7 @@ export const LatidosProvider = ({ children }) => {
 
     const intervalId = setInterval(checkMidnight, 15000);
     return () => clearInterval(intervalId);
-  }, [userId, user, dailyGoal, resetPedometerSteps]);
+  }, [userId, user, dailyGoal]);
 
   const [activeCode, setActiveCode] = useState(() => {
     try {
@@ -1480,12 +1432,6 @@ export const LatidosProvider = ({ children }) => {
       replicatedRoute, isVehicleDetected, currentSpeedKmh, currentPosition, hasRealLocation,
       startRouteSession, pauseRouteSession, resumeRouteSession, discardRouteSession,
       addRouteCheckpoint, editRouteCheckpoint, removeRouteCheckpoint, finishRouteSession,
-      // Global Pedometer Controls (persists across navigation tabs)
-      isTracking: isStepTracking, isStepTracking,
-      startTracking: startStepTracking, startStepTracking,
-      stopTracking: stopStepTracking, stopStepTracking,
-      alertMsg: stepAlertMsg, setAlertMsg: setStepAlertMsg,
-      isSupported: isStepSupported,
       login, logout, loginUser, registerUser,
       fetchAdminStats, fetchAdminUsers, createUser, fetchComercios, createComercio, updateComercio,
       deleteComercio, updateUser, deleteUser, validarBono, rechazarBono, fetchComercioStats, updateComercioBonos,

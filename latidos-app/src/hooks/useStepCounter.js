@@ -3,21 +3,13 @@ import { App } from '@capacitor/app';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 
-// ── Step Detection Constants ──
-// Human walking cadence is strictly between 0.33s (fast run ~180 spm) and 1.8s (slow stroll ~33 spm).
-const MIN_STEP_INTERVAL_MS = 330;   // Minimum ms between consecutive steps (rejects Android double-bounce jitter)
-const MAX_STEP_INTERVAL_MS = 1800;  // Maximum ms between steps before burst cadence resets
-const STEP_THRESHOLD = 1.90;        // Minimum dynamic acceleration (m/s²) for a foot strike impact
-const VALLEY_THRESHOLD = 0.85;      // Signal must return below this baseline before the next step is valid
-const MAX_WALKING_ACCEL = 14.0;     // Ceiling (m/s²) to filter out violent shaking / drop impacts
-
-// Low-pass Exponential Moving Average factors
-const SIGNAL_SMOOTH_ALPHA = 0.22;   // Smoothes out high-frequency sensor noise (>3.5 Hz)
-const GRAVITY_BASELINE_ALPHA = 0.03;// Slow tracker for the static 1G gravity orientation vector
-
-// Burst buffer: requires at least 4 rhythmic steps before confirming walk session.
-// Eliminates 98% of false steps from pocket adjustments, desk vibrations, or reaching for phone!
-const BURST_MIN_STEPS = 4;
+// Step detection parameters
+// These values work on Android (native + gravity fallback) and iOS
+const STEP_THRESHOLD = 1.75;        // Minimum dynamic acceleration (m/s²) for a foot strike
+const VALLEY_THRESHOLD = 1.10;      // Signal must return below this before counting next step
+const MAX_WALKING_ACCEL = 14.0;     // Upper ceiling (m/s²) - rejects violent shakes
+const MIN_STEP_INTERVAL_MS = 300;   // Minimum ms between steps (~200spm max)
+const MAX_STEP_INTERVAL_MS = 2200;  // Maximum ms between steps
 
 export const useStepCounter = (initialSteps = 0, options = {}) => {
   const [steps, setSteps] = useState(initialSteps);
@@ -27,24 +19,14 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
   const [alertMsg, setAlertMsg] = useState(null);
 
   const isTrackingRef = useRef(false);
+  const lastStepTime = useRef(0);
+  const lastLinMag = useRef(0);
+  const isRising = useRef(false);
+  const hasResetValley = useRef(true);
   const stepsRef = useRef(initialSteps);
-
-  // Sensor state refs
-  const smoothedMagRef = useRef(0);
-  const gravityEstRef = useRef(9.80665);
-  const lastStepTimeRef = useRef(0);
-  const isRisingRef = useRef(false);
-  const hasResetValleyRef = useRef(true);
-  const prevSmoothedMagRef = useRef(0);
-
-  // Burst validation refs
-  const burstCountRef = useRef(0);
-  const lastCandidateTimeRef = useRef(0);
-  const isBurstActiveRef = useRef(false);
-
   const wakeLockRef = useRef(null);
 
-  // Synchronize when initialSteps updates externally (e.g. from DB load or day change)
+  // Sync with initialSteps when it arrives from DB (only if not currently tracking)
   useEffect(() => {
     if (!isTrackingRef.current) {
       stepsRef.current = initialSteps;
@@ -56,101 +38,73 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
     if (!isTrackingRef.current) return;
     if (options.isVehicleDetected) return;
 
-    let dynamicAccel = 0;
+    let linMag = 0;
     const nativeLin = event.acceleration;
 
-    // Check if device provides genuine linear acceleration (without gravity)
+    // Android Zero-Trap Fix:
+    // Many Android WebViews expose event.acceleration = {x:0, y:0, z:0}
+    // Only use native linear if it has real non-zero readings
     const hasNativeLinear = nativeLin && (
-      (Math.abs(nativeLin.x || 0) + Math.abs(nativeLin.y || 0) + Math.abs(nativeLin.z || 0)) > 0.15
+      (Math.abs(nativeLin.x || 0) + Math.abs(nativeLin.y || 0) + Math.abs(nativeLin.z || 0)) > 0.12
     );
 
     if (hasNativeLinear) {
       const { x, y, z } = nativeLin;
-      const rawMag = Math.sqrt(x * x + y * y + z * z);
-      // Low-pass filter to eliminate sensor jitter in Android WebViews
-      smoothedMagRef.current = smoothedMagRef.current + SIGNAL_SMOOTH_ALPHA * (rawMag - smoothedMagRef.current);
-      dynamicAccel = smoothedMagRef.current;
+      linMag = Math.sqrt(x * x + y * y + z * z);
     } else if (event.accelerationIncludingGravity && event.accelerationIncludingGravity.x != null) {
+      // Subtract gravity norm: |sqrt(x²+y²+z²) - 9.80665|
+      // Stationary tilt/rotation → ≈0 m/s², walking foot strike → 1.5-3.5 m/s²
       const { x, y, z } = event.accelerationIncludingGravity;
-      const rawTotalMag = Math.sqrt(x * x + y * y + z * z);
-
-      // Adaptive gravity tracker (immune to calibration errors where 1g != 9.8)
-      gravityEstRef.current = gravityEstRef.current + GRAVITY_BASELINE_ALPHA * (rawTotalMag - gravityEstRef.current);
-      const instantDeviation = Math.abs(rawTotalMag - gravityEstRef.current);
-
-      // Low-pass smoothing
-      smoothedMagRef.current = smoothedMagRef.current + SIGNAL_SMOOTH_ALPHA * (instantDeviation - smoothedMagRef.current);
-      dynamicAccel = smoothedMagRef.current;
+      const totalMag = Math.sqrt(x * x + y * y + z * z);
+      linMag = Math.abs(totalMag - 9.80665);
     } else {
       return;
     }
 
     const now = Date.now();
 
-    // 1. Valley reset: signal must return near resting baseline between foot strikes
-    if (dynamicAccel < VALLEY_THRESHOLD) {
-      hasResetValleyRef.current = true;
+    // Valley reset: signal must return to baseline between foot strikes
+    if (linMag < VALLEY_THRESHOLD) {
+      hasResetValley.current = true;
     }
 
-    // 2. Detect upward slope crossing threshold
-    if (
-      hasResetValleyRef.current &&
-      dynamicAccel > STEP_THRESHOLD &&
-      dynamicAccel < MAX_WALKING_ACCEL &&
-      !isRisingRef.current
-    ) {
-      isRisingRef.current = true;
+    // Rising edge: signal crossing threshold from below
+    if (hasResetValley.current && linMag > STEP_THRESHOLD && linMag < MAX_WALKING_ACCEL && !isRising.current) {
+      isRising.current = true;
     }
 
-    // 3. Peak detection (turning point: was rising, now dropping)
-    if (isRisingRef.current && dynamicAccel < prevSmoothedMagRef.current) {
-      isRisingRef.current = false;
-      const timeSinceLastCandidate = now - lastCandidateTimeRef.current;
+    // Peak detection: signal turning down after rising past threshold
+    if (isRising.current && linMag < lastLinMag.current) {
+      isRising.current = false;
+      const interval = now - lastStepTime.current;
 
-      // Check cadence validity
-      if (timeSinceLastCandidate < MIN_STEP_INTERVAL_MS) {
-        // Discard high-frequency bounce
-      } else if (timeSinceLastCandidate > MAX_STEP_INTERVAL_MS) {
-        // Gap too long: user stopped walking, reset burst buffer
-        burstCountRef.current = 1;
-        isBurstActiveRef.current = false;
-        lastCandidateTimeRef.current = now;
-        hasResetValleyRef.current = false;
-      } else {
-        // Rhythmically consistent step candidate!
-        burstCountRef.current += 1;
-        lastCandidateTimeRef.current = now;
-        hasResetValleyRef.current = false;
-
-        if (!isBurstActiveRef.current) {
-          // If we reached the required rhythmic steps (e.g. 4 consecutive strides), confirm walk
-          if (burstCountRef.current >= BURST_MIN_STEPS) {
-            isBurstActiveRef.current = true;
-            lastStepTimeRef.current = now;
-            stepsRef.current += BURST_MIN_STEPS;
-            setSteps(stepsRef.current);
-            if (typeof options.onStep === 'function') {
-              options.onStep(stepsRef.current);
-            }
-          }
-        } else {
-          // Already in active walking session: count every step in real-time
-          lastStepTimeRef.current = now;
-          stepsRef.current += 1;
-          setSteps(stepsRef.current);
-          if (typeof options.onStep === 'function') {
-            options.onStep(stepsRef.current);
-          }
+      if (interval >= MIN_STEP_INTERVAL_MS && interval <= MAX_STEP_INTERVAL_MS && linMag < MAX_WALKING_ACCEL) {
+        lastStepTime.current = now;
+        hasResetValley.current = false;
+        stepsRef.current += 1;
+        setSteps(stepsRef.current);
+        if (typeof options.onStep === 'function') {
+          options.onStep(stepsRef.current);
+        }
+      } else if (interval > MAX_STEP_INTERVAL_MS) {
+        // Long pause: still allow first step after pause
+        lastStepTime.current = now;
+        hasResetValley.current = false;
+        stepsRef.current += 1;
+        setSteps(stepsRef.current);
+        if (typeof options.onStep === 'function') {
+          options.onStep(stepsRef.current);
         }
       }
     }
 
-    prevSmoothedMagRef.current = dynamicAccel;
+    lastLinMag.current = linMag;
   }, [options.isVehicleDetected, options.onStep]);
 
   const startTracking = useCallback(async () => {
     const isMobile = Capacitor.isNativePlatform() || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
+    // iOS 13+ requires explicit permission for DeviceMotion
     if (isMobile && typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
       try {
         const result = await DeviceMotionEvent.requestPermission();
@@ -169,50 +123,51 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
       setPermissionState('granted');
     }
 
+    // Wake Lock to keep screen on during tracking
     try {
       if ('wakeLock' in navigator) {
         wakeLockRef.current = await navigator.wakeLock.request('screen');
       }
 
+      // Capacitor native: try to schedule a persistent notification (non-blocking)
       if (Capacitor.isNativePlatform()) {
         try {
           let permStatus = await LocalNotifications.checkPermissions();
           if (permStatus.display !== 'granted') {
             permStatus = await LocalNotifications.requestPermissions();
           }
-
           if (permStatus.display === 'granted') {
             await LocalNotifications.schedule({
-              notifications: [
-                {
-                  id: 1,
-                  title: "Latidos - Contando Pasos",
-                  body: "La aplicación está contando tus pasos.",
-                  ongoing: true,
-                  autoCancel: false
-                }
-              ]
+              notifications: [{
+                id: 1,
+                title: 'Latidos - Contando Pasos',
+                body: 'La aplicación está contando tus pasos.',
+                ongoing: true,
+                autoCancel: false
+              }]
             });
           }
         } catch (notifErr) {
-          console.warn('LocalNotifications setup warning:', notifErr);
+          console.warn('LocalNotifications warning:', notifErr);
+          // Do NOT return — we still want to count steps even without notification
         }
       }
     } catch (err) {
-      console.error(`Error starting tracking: ${err.message}`);
+      console.warn('startTracking setup warning:', err.message);
     }
 
-    // Reset sensor filters
-    smoothedMagRef.current = 0;
-    prevSmoothedMagRef.current = 0;
-    burstCountRef.current = 0;
-    isBurstActiveRef.current = false;
-    hasResetValleyRef.current = true;
-    isRisingRef.current = false;
-    lastCandidateTimeRef.current = 0;
+    // Reset sensor state
+    lastStepTime.current = 0;
+    lastLinMag.current = 0;
+    isRising.current = false;
+    hasResetValley.current = true;
 
     if (typeof window !== 'undefined' && typeof window.DeviceMotionEvent !== 'undefined') {
       window.addEventListener('devicemotion', handleMotion, { passive: true });
+    } else {
+      setIsSupported(false);
+      setAlertMsg('Tu dispositivo no soporta el sensor de movimiento.');
+      return;
     }
 
     isTrackingRef.current = true;
@@ -225,7 +180,7 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
       window.removeEventListener('devicemotion', handleMotion);
     }
     if (wakeLockRef.current !== null) {
-      wakeLockRef.current.release().catch(console.error);
+      try { wakeLockRef.current.release(); } catch (e) {}
       wakeLockRef.current = null;
     }
 
@@ -233,23 +188,19 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
       try {
         await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
       } catch (err) {
-        console.error(err);
+        console.warn('Stop notification warning:', err);
       }
     }
 
-    burstCountRef.current = 0;
-    isBurstActiveRef.current = false;
     setIsTracking(false);
   }, [handleMotion]);
 
-  const resetSteps = useCallback((newStepCount = 0) => {
-    stepsRef.current = newStepCount;
-    setSteps(newStepCount);
-    burstCountRef.current = 0;
-    isBurstActiveRef.current = false;
+  const resetSteps = useCallback((newCount = 0) => {
+    stepsRef.current = newCount;
+    setSteps(newCount);
   }, []);
 
-  // Clean up on unmount
+  // Clean up listener on unmount
   useEffect(() => {
     return () => {
       if (typeof window !== 'undefined' && typeof window.DeviceMotionEvent !== 'undefined') {
@@ -258,15 +209,5 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
     };
   }, [handleMotion]);
 
-  return {
-    steps,
-    isTracking,
-    isSupported,
-    permissionState,
-    alertMsg,
-    setAlertMsg,
-    startTracking,
-    stopTracking,
-    resetSteps
-  };
+  return { steps, isTracking, isSupported, permissionState, alertMsg, setAlertMsg, startTracking, stopTracking, resetSteps };
 };
