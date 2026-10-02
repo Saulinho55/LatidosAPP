@@ -187,58 +187,83 @@ export const LatidosProvider = ({ children }) => {
         }
       }
 
-      // Odometry filter: discard low-accuracy readings (> 80 meters) for distance accumulation
-      if (typeof accuracy === 'number' && accuracy > 80) {
+      // Odometry filter: Only accumulate distance from genuine, accurate GPS fixes (<= 30m accuracy).
+      // Cellular tower or indoor Wi-Fi bounce (> 30m) causes 40-70m jumps (the "88 pasos fantasma") and must be ignored for distance.
+      const isAccurateFix = typeof accuracy === 'number' && accuracy <= 30;
+
+      if (!isAccurateFix) {
         return;
       }
 
-      setRoutePath(prev => [...prev, newPoint]);
-
-      if (routeLastPointRef.current) {
-        const dist = haversineDistance(routeLastPointRef.current, newPoint);
-        // Filter out indoor GPS drift while sitting/in chair (require genuine pedestrian displacement)
-        const isWalkingDisplacement = (dist >= 2.5 && dist < 50) && (speedKmh >= 1.0 || dist >= 4.0);
-        if (isWalkingDisplacement) {
-          setRouteDistanceM(prevDist => {
-            const nextDist = prevDist + dist;
-            
-            // Real-time steps calculation and synchronization
-            const totalRouteSteps = Math.round(nextDist * 1.312);
-            const stepsDelta = totalRouteSteps - lastRouteStepsAwardedRef.current;
-            
-            if (stepsDelta > 0) {
-              lastRouteStepsAwardedRef.current = totalRouteSteps;
-              setSteps(prevSteps => {
-                const updatedTotalSteps = prevSteps + stepsDelta;
-                const uid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
-                if (uid) {
-                  supabaseService.updateUser(uid, { steps_today: updatedTotalSteps }).catch(console.error);
-                }
-                return updatedTotalSteps;
-              });
-
-              // Cumulative Latidos gain (1 Latido every 100 steps)
-              const totalRouteLatidos = Math.floor(totalRouteSteps / 100);
-              const latidosToAward = totalRouteLatidos - lastRouteLatidosAwardedRef.current;
-              if (latidosToAward > 0) {
-                lastRouteLatidosAwardedRef.current = totalRouteLatidos;
-                ganarLatidos(latidosToAward);
-                const uid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
-                if (uid) {
-                  const fecha = getLocalDateStr();
-                  supabaseService.upsertActivity(uid, fecha, totalRouteSteps, latidosToAward).catch(console.error);
-                }
-              }
-            }
-
-            return nextDist;
-          });
-          routeLastPointRef.current = newPoint;
-          routeLastTimeRef.current = now;
-        }
-      } else {
+      // First valid accurate point establishes the route starting anchor
+      if (!routeLastPointRef.current) {
         routeLastPointRef.current = newPoint;
         routeLastTimeRef.current = now;
+        setRoutePath([newPoint]);
+        return;
+      }
+
+      const dt = routeLastTimeRef.current ? Math.max(0.5, (now - routeLastTimeRef.current) / 1000) : 1;
+      const dist = haversineDistance(routeLastPointRef.current, newPoint);
+
+      // Teleport / GPS jump filter:
+      // Maximum realistic human sprinting speed is ~8 m/s (28 km/h).
+      // Any jump greater than maxRealisticDist is a GPS glitch, NOT human walking.
+      const maxRealisticDist = Math.max(12.0, dt * 7.0);
+
+      if (dist > maxRealisticDist) {
+        // GPS teleported/jumped!
+        // CRITICAL FIX: Update the anchor point so the route NEVER gets permanently stuck/frozen,
+        // but DO NOT add the teleport distance to the user's walked distance!
+        routeLastPointRef.current = newPoint;
+        routeLastTimeRef.current = now;
+        return;
+      }
+
+      // Anti-drift filter: require at least 2.0 meters of displacement from last point.
+      // Small 0.5 - 1.5m GPS noise while sitting/standing still is ignored.
+      // As soon as the user takes 2-3 genuine walking steps, dist exceeds 2m and accumulates.
+      if (dist >= 2.0) {
+        setRoutePath(prev => [...prev, newPoint]);
+        routeLastPointRef.current = newPoint;
+        routeLastTimeRef.current = now;
+
+        setRouteDistanceM(prevDist => {
+          const nextDist = prevDist + dist;
+
+          // Real-time steps calculation and synchronization (~0.762m per stride -> 1.312 steps/m)
+          const totalRouteSteps = Math.round(nextDist * 1.312);
+          const stepsDelta = totalRouteSteps - lastRouteStepsAwardedRef.current;
+
+          if (stepsDelta > 0) {
+            lastRouteStepsAwardedRef.current = totalRouteSteps;
+            let currentDaySteps = 0;
+            setSteps(prevSteps => {
+              const updatedTotalSteps = prevSteps + stepsDelta;
+              currentDaySteps = updatedTotalSteps;
+              const uid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
+              if (uid) {
+                supabaseService.updateUser(uid, { steps_today: updatedTotalSteps }).catch(console.error);
+              }
+              return updatedTotalSteps;
+            });
+
+            // Cumulative Latidos gain (1 Latido every 100 steps)
+            const totalRouteLatidos = Math.floor(totalRouteSteps / 100);
+            const latidosToAward = totalRouteLatidos - lastRouteLatidosAwardedRef.current;
+            if (latidosToAward > 0) {
+              lastRouteLatidosAwardedRef.current = totalRouteLatidos;
+              ganarLatidos(latidosToAward);
+              const uid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
+              if (uid) {
+                const fecha = getLocalDateStr();
+                supabaseService.upsertActivity(uid, fecha, currentDaySteps || totalRouteSteps, latidosToAward).catch(console.error);
+              }
+            }
+          }
+
+          return nextDist;
+        });
       }
     };
 
