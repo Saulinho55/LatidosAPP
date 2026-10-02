@@ -227,43 +227,7 @@ export const LatidosProvider = ({ children }) => {
         setRoutePath(prev => [...prev, newPoint]);
         routeLastPointRef.current = newPoint;
         routeLastTimeRef.current = now;
-
-        setRouteDistanceM(prevDist => {
-          const nextDist = prevDist + dist;
-
-          // Real-time steps calculation and synchronization (~0.762m per stride -> 1.312 steps/m)
-          const totalRouteSteps = Math.round(nextDist * 1.312);
-          const stepsDelta = totalRouteSteps - lastRouteStepsAwardedRef.current;
-
-          if (stepsDelta > 0) {
-            lastRouteStepsAwardedRef.current = totalRouteSteps;
-            let currentDaySteps = 0;
-            setSteps(prevSteps => {
-              const updatedTotalSteps = prevSteps + stepsDelta;
-              currentDaySteps = updatedTotalSteps;
-              const uid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
-              if (uid) {
-                supabaseService.updateUser(uid, { steps_today: updatedTotalSteps }).catch(console.error);
-              }
-              return updatedTotalSteps;
-            });
-
-            // Cumulative Latidos gain (1 Latido every 100 steps)
-            const totalRouteLatidos = Math.floor(totalRouteSteps / 100);
-            const latidosToAward = totalRouteLatidos - lastRouteLatidosAwardedRef.current;
-            if (latidosToAward > 0) {
-              lastRouteLatidosAwardedRef.current = totalRouteLatidos;
-              ganarLatidos(latidosToAward);
-              const uid = userId || parseInt(localStorage.getItem('latidos_user_id'), 10);
-              if (uid) {
-                const fecha = getLocalDateStr();
-                supabaseService.upsertActivity(uid, fecha, currentDaySteps || totalRouteSteps, latidosToAward).catch(console.error);
-              }
-            }
-          }
-
-          return nextDist;
-        });
+        setRouteDistanceM(prevDist => prevDist + dist);
       }
     };
 
@@ -1259,17 +1223,20 @@ export const LatidosProvider = ({ children }) => {
     setRoutePoints(prev => prev.filter((_, i) => i !== index));
   };
 
-  const finishRouteSession = async (finalRouteName) => {
+  const finishRouteSession = async (finalRouteName, customSteps = null) => {
     setIsRouteTracking(false);
     const finalName = (finalRouteName && finalRouteName.trim()) 
       ? finalRouteName.trim() 
       : (replicatedRoute ? `Re: ${replicatedRoute.name}` : `Paseo ${new Date().toLocaleDateString('es-ES')}`);
     
-    const routeSteps = Math.round(routeDistanceM * 1.312);
+    const routeSteps = typeof customSteps === 'number' && customSteps > 0 
+      ? customSteps 
+      : Math.round(routeDistanceM * 1.312);
     const latidosEarned = Math.floor(routeSteps / 100);
+    const effectiveDistanceKm = Math.max((routeDistanceM || 0) / 1000, (routeSteps * 0.762) / 1000);
     const finalRouteData = {
       name: finalName,
-      distance: (routeDistanceM || 0) / 1000,
+      distance: effectiveDistanceKm,
       duration: routeElapsed || 1,
       latidos_earned: latidosEarned,
       path: routePath && routePath.length > 0 ? routePath : (currentPosition ? [{ lat: currentPosition.lat, lon: currentPosition.lon }] : [{ lat: 28.0048, lon: -15.4158 }]),

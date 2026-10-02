@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { useLatidos } from '../context/LatidosContext';
+import { useStepCounter } from '../hooks/useStepCounter';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -617,12 +618,63 @@ const RutasPage = () => {
   const [expandedRouteId, setExpandedRouteId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const speedKmh = isRouteTracking ? (currentSpeedKmh || 0) : 0;
-  const routeSteps = Math.round(routeDistanceM * 1.312);
+
+  // Physical pedometer for the active route (senses every step on Android & iOS)
+  const {
+    steps: pedometerRouteSteps,
+    isTracking: isRoutePedometerTracking,
+    startTracking: startRoutePedometer,
+    stopTracking: stopRoutePedometer,
+    resetSteps: resetRoutePedometer
+  } = useStepCounter(0, { isVehicleDetected });
+
+  // Keep pedometer state in lockstep with route tracking
+  useEffect(() => {
+    if (isRouteTracking) {
+      startRoutePedometer();
+    } else {
+      stopRoutePedometer();
+    }
+  }, [isRouteTracking]);
+
+  useEffect(() => {
+    if (!isRouteActive) {
+      resetRoutePedometer(0);
+      lastSyncedRouteStepsRef.current = 0;
+    }
+  }, [isRouteActive]);
+
+  const lastSyncedRouteStepsRef = useRef(0);
+
+  // Effective route steps: physical footsteps from pedometer, or GPS estimated steps if GPS is higher
+  const gpsEstimatedSteps = Math.round((routeDistanceM || 0) * 1.312);
+  const routeSteps = Math.max(pedometerRouteSteps || 0, gpsEstimatedSteps);
   const earnedLatidos = Math.floor(routeSteps / 100);
   const currentPos = currentPosition || { lat: 28.0048, lon: -15.4158 };
 
+  // Real-time synchronization of route steps to daily total and Latidos awarding
+  useEffect(() => {
+    if (!isRouteTracking) return;
+    const delta = routeSteps - lastSyncedRouteStepsRef.current;
+    if (delta > 0) {
+      lastSyncedRouteStepsRef.current = routeSteps;
+      const nextTotal = (totalSteps || 0) + delta;
+      updateSteps(nextTotal);
+
+      const oldLatidos = Math.floor((routeSteps - delta) / 100);
+      const newLatidos = Math.floor(routeSteps / 100);
+      const toAward = newLatidos - oldLatidos;
+      if (toAward > 0) {
+        ganarLatidos(toAward);
+      }
+    }
+  }, [routeSteps, isRouteTracking]);
+
   const handleStartRoute = () => {
+    resetRoutePedometer(0);
+    lastSyncedRouteStepsRef.current = 0;
     startRouteSession();
+    startRoutePedometer();
   };
 
   const handleOpenAddPoint = () => {
@@ -662,12 +714,16 @@ const RutasPage = () => {
 
   const handleFinish = () => {
     pauseRouteSession();
+    stopRoutePedometer();
     const defaultName = replicatedRoute ? `Re: ${replicatedRoute.name}` : `Paseo ${new Date().toLocaleDateString('es-ES')}`;
     setRouteName(defaultName);
     setShowSaveModal(true);
   };
 
   const handleDiscardRoute = () => {
+    stopRoutePedometer();
+    resetRoutePedometer(0);
+    lastSyncedRouteStepsRef.current = 0;
     discardRouteSession();
     setShowDiscardConfirm(false);
   };
@@ -677,7 +733,10 @@ const RutasPage = () => {
     setIsSaving(true);
 
     try {
-      await finishRouteSession(routeName);
+      await finishRouteSession(routeName, routeSteps);
+      stopRoutePedometer();
+      resetRoutePedometer(0);
+      lastSyncedRouteStepsRef.current = 0;
       setShowSaveModal(false);
     } catch (err) {
       console.error('Error guardando la ruta:', err);
@@ -688,7 +747,10 @@ const RutasPage = () => {
   };
 
   const handleReplicar = (rt) => {
+    resetRoutePedometer(0);
+    lastSyncedRouteStepsRef.current = 0;
     startRouteSession(rt);
+    startRoutePedometer();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -896,6 +958,9 @@ const RutasPage = () => {
                 type="button"
                 onClick={() => {
                   if (window.confirm('¿Reiniciar y limpiar la ruta para empezar de nuevo desde cero?')) {
+                    stopRoutePedometer();
+                    resetRoutePedometer(0);
+                    lastSyncedRouteStepsRef.current = 0;
                     discardRouteSession();
                   }
                 }}

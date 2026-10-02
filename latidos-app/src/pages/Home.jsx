@@ -26,6 +26,9 @@ const Home = () => {
     tr,
     isVehicleDetected,
     isRouteActive,
+    isRouteTracking,
+    routeDistanceM,
+    discardRouteSession
   } = useLatidos();
 
   const navigate = useNavigate();
@@ -155,10 +158,70 @@ const Home = () => {
         </div>
       )}
 
+      {/* Route in progress notice with quick actions */}
+      {isRouteActive && (
+        <div style={{
+          margin: '0.6rem 1rem 0.2rem',
+          backgroundColor: isRouteTracking ? 'rgba(34, 197, 94, 0.12)' : 'rgba(243, 156, 18, 0.12)',
+          border: `1.5px solid ${isRouteTracking ? '#22c55e' : '#f39c12'}`,
+          borderRadius: '1.2rem',
+          padding: '0.75rem 1rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: 'var(--shadow-card)'
+        }}>
+          <div>
+            <p style={{ margin: 0, fontWeight: '700', fontSize: '0.88rem', color: 'var(--color-text)' }}>
+              {isRouteTracking ? '🚶‍♂️ Ruta activa grabando' : '⏸️ Ruta en pausa'}
+            </p>
+            <p style={{ margin: '0.15rem 0 0', fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+              {routeDistanceM ? `${(routeDistanceM / 1000).toFixed(2).replace('.', ',')} km` : '0,00 km'}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '0.4rem' }}>
+            <button
+              onClick={() => navigate('/rutas')}
+              style={{
+                backgroundColor: isRouteTracking ? '#22c55e' : '#f39c12',
+                color: 'white',
+                border: 'none',
+                borderRadius: '1.5rem',
+                padding: '0.4rem 0.85rem',
+                fontSize: '0.78rem',
+                fontWeight: '700',
+                cursor: 'pointer'
+              }}
+            >
+              Ver ruta
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm('¿Finalizar y descartar la sesión de ruta actual?')) {
+                  discardRouteSession();
+                }
+              }}
+              style={{
+                backgroundColor: 'transparent',
+                color: '#e74c3c',
+                border: '1px solid #e74c3c',
+                borderRadius: '1.5rem',
+                padding: '0.4rem 0.75rem',
+                fontSize: '0.78rem',
+                fontWeight: '700',
+                cursor: 'pointer'
+              }}
+            >
+              Finalizar
+            </button>
+          </div>
+        </div>
+      )}
+
       <StepsCard
         pasos={isAuthenticated ? effectiveSteps : 0}
         objetivo={dailyGoal || 10000}
-        isTracking={isAuthenticated && (isTracking || isRouteActive)}
+        isTracking={isAuthenticated && isTracking}
         isSupported={isSupported}
         onStart={() => isAuthenticated ? startTracking() : navigate('/login')}
         onStop={stopTracking}
