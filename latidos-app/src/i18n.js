@@ -36,6 +36,12 @@ export const t = {
     infoTitle: 'Información',
     aceptar: 'Aceptar',
 
+    // Entorno (clasificación interior/exterior)
+    envCalibrando: 'Calibrando sensores…',
+    envExterior: 'En la calle ✓',
+    envInterior: 'En interior',
+    envDudoso: 'Entorno sin confirmar',
+
     // Rutas
     misRutas: 'Mis Rutas',
     rutasRecomendadas: 'Rutas Recomendadas',
@@ -169,6 +175,12 @@ export const t = {
     tuEstasAqui: 'You are here',
     infoTitle: 'Information',
     aceptar: 'OK',
+
+    // Environment (indoor/outdoor classification)
+    envCalibrando: 'Calibrating sensors…',
+    envExterior: 'Outdoors ✓',
+    envInterior: 'Indoors',
+    envDudoso: 'Environment unconfirmed',
 
     // Rutas
     misRutas: 'My Routes',

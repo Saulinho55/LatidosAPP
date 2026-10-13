@@ -585,6 +585,7 @@ const RutasPage = () => {
     isVehicleDetected,
     currentSpeedKmh,
     currentPosition,
+    environment,
     startRouteSession,
     pauseRouteSession,
     resumeRouteSession,
@@ -1014,6 +1015,32 @@ const RutasPage = () => {
           boxShadow: '0 4px 12px rgba(231, 76, 60, 0.3)'
         }}>
           (Vehículo detectado, pasos pausados)
+        </div>
+      )}
+
+      {/* Entorno: indicador interior/exterior del clasificador de sensores */}
+      {isRouteActive && environment && (
+        <div style={{
+          margin: '0 1rem 0.75rem',
+          backgroundColor: !environment.ready ? 'rgba(120,120,140,0.12)'
+            : environment.label === 'exterior' ? 'rgba(34,197,94,0.12)'
+            : environment.label === 'interior' ? 'rgba(231,76,60,0.12)'
+            : 'rgba(245,158,11,0.14)',
+          color: !environment.ready ? 'var(--color-detail)'
+            : environment.label === 'exterior' ? '#15803d'
+            : environment.label === 'interior' ? '#b91c1c'
+            : '#b45309',
+          padding: '0.5rem 1rem',
+          borderRadius: '1rem',
+          textAlign: 'center',
+          fontFamily: 'var(--font-main)',
+          fontWeight: '700',
+          fontSize: '0.82rem',
+          border: '1.5px solid transparent'
+        }}>
+          {environment.ready
+            ? `${tr?.[`env${environment.label.charAt(0).toUpperCase() + environment.label.slice(1)}`] || environment.label} · ${Math.round(environment.pOutdoor * 100)}%`
+            : (tr?.envCalibrando || 'Calibrando sensores…')}
         </div>
       )}
 
