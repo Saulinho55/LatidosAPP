@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { supabase } from '../lib/supabase';
 import { supabaseService } from '../services/supabaseService';
 import { haversineDistance } from '../hooks/useGeolocation';
+import { outdoorEvidence, startAuxSensors, stopAuxSensors } from '../utils/outdoorDetector';
 import { getLocalDateStr, computeWeeklyStepsFromActivity, computeStreakFromActivity } from '../utils/dateUtils';
 import { t } from '../i18n';
 
@@ -40,6 +41,8 @@ export const LatidosProvider = ({ children }) => {
   const [currentSpeedKmh, setCurrentSpeedKmh] = useState(0);
   const [currentPosition, setCurrentPosition] = useState({ lat: 28.0048, lon: -15.4158, accuracy: 100, speed: 0, isReal: false });
   const [hasRealLocation, setHasRealLocation] = useState(false);
+  // ── Clasificación Interior/Exterior (ventana deslizante, best-effort) ──
+  const [environment, setEnvironment] = useState({ ready: false, pOutdoor: 0.5, label: 'calibrando', signals: {}, samples: 0 });
   const globalWatchIdRef = useRef(null);
 
   const routeWatchIdRef = useRef(null);
@@ -59,6 +62,8 @@ export const LatidosProvider = ({ children }) => {
       const { latitude: lat, longitude: lon, accuracy, speed } = pos.coords;
       setCurrentPosition({ lat, lon, accuracy, speed: speed || 0, isReal: true });
       setHasRealLocation(true);
+      // Alimentar el clasificador interior/exterior con cada fix GNSS
+      outdoorEvidence.addGnssSample(accuracy);
     };
 
     // Phase 1: Fast network fix (cellular / Wi-Fi - works in <1s even indoors)
@@ -128,6 +133,19 @@ export const LatidosProvider = ({ children }) => {
     return () => clearInterval(routeTimerRef.current);
   }, [isRouteTracking]);
 
+  // ── Clasificador Interior/Exterior: sensores aux + evaluación periódica ──
+  // Arranca al montar la app y no interfiere con el conteo de pasos: solo observa.
+  useEffect(() => {
+    startAuxSensors();
+    const evalTimer = setInterval(() => {
+      setEnvironment(outdoorEvidence.evaluate());
+    }, 3000);
+    return () => {
+      clearInterval(evalTimer);
+      stopAuxSensors();
+    };
+  }, []);
+
   // GPS Tracking for active route
   useEffect(() => {
     if (!isRouteTracking) {
@@ -168,6 +186,8 @@ export const LatidosProvider = ({ children }) => {
       setCurrentSpeedKmh(speedKmh);
       setCurrentPosition({ lat, lon, accuracy, speed: speedKmh / 3.6, isReal: true });
       setHasRealLocation(true);
+      // Los fixes de la ruta también alimentan el clasificador interior/exterior
+      outdoorEvidence.addGnssSample(accuracy);
 
       // Vehicular speed check (> 20 km/h)
       if (speedKmh > 20.0) {
@@ -1234,11 +1254,20 @@ export const LatidosProvider = ({ children }) => {
       : Math.round(routeDistanceM * 1.312);
     const latidosEarned = Math.floor(routeSteps / 100);
     const effectiveDistanceKm = Math.max((routeDistanceM || 0) / 1000, (routeSteps * 0.762) / 1000);
+    // Sello de entorno de la sesión (ventana deslizante global de evidencia).
+    // No bloquea ni descuenta pasos: es metadato de confianza para auditoría
+    // y para el score anti-trampa server-side.
+    let envSeal = null;
+    try {
+      const ev = outdoorEvidence.evaluate();
+      envSeal = { label: ev.label, pOutdoor: ev.pOutdoor, samples: ev.samples };
+    } catch {}
     const finalRouteData = {
       name: finalName,
       distance: effectiveDistanceKm,
       duration: routeElapsed || 1,
       latidos_earned: latidosEarned,
+      environment: envSeal,
       path: routePath && routePath.length > 0 ? routePath : (currentPosition ? [{ lat: currentPosition.lat, lon: currentPosition.lon }] : [{ lat: 28.0048, lon: -15.4158 }]),
       points: routePoints || []
     };
@@ -1431,6 +1460,7 @@ export const LatidosProvider = ({ children }) => {
       // Active Route Session (persists across tabs)
       isRouteActive, isRouteTracking, routeElapsed, routeDistanceM, routePath, routePoints,
       replicatedRoute, isVehicleDetected, currentSpeedKmh, currentPosition, hasRealLocation,
+      environment,
       startRouteSession, pauseRouteSession, resumeRouteSession, discardRouteSession,
       addRouteCheckpoint, editRouteCheckpoint, removeRouteCheckpoint, finishRouteSession,
       login, logout, loginUser, registerUser,
