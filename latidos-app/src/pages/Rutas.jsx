@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { useLatidos } from '../context/LatidosContext';
 import { useStepCounter } from '../hooks/useStepCounter';
+import { buildColoredSegments } from '../utils/routePathPasses';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -290,6 +291,7 @@ const LiveMap = ({ position, route, points, targetRoute, targetPoints, onEditPoi
   const currentPos = position || { lat: 28.0048, lon: -15.4158 };
   const positions = (route || []).map(p => [p.lat, p.lon]);
   const targetPositions = (targetRoute || []).map(p => [p.lat, p.lon]);
+  const coloredSegments = useMemo(() => buildColoredSegments(route), [route]);
   
   return (
     <div style={{ height: '320px', width: 'calc(100% - 2rem)', borderRadius: '1.5rem', overflow: 'hidden', margin: '0 1rem 0.75rem', boxShadow: 'var(--shadow-card)', zIndex: 0, position: 'relative' }}>
@@ -324,20 +326,30 @@ const LiveMap = ({ position, route, points, targetRoute, targetPoints, onEditPoi
           </>
         )}
 
-        {/* Live user walked route in bright green */}
+        {/* Live user walked route with 4 pass colors: Verde (1ª), Amarillo (2ª), Naranja (3ª), Rojo (4ª) */}
+        {coloredSegments[1] && coloredSegments[1].length > 0 && (
+          <Polyline positions={coloredSegments[1]} color="#22c55e" weight={6} opacity={0.95} />
+        )}
+        {coloredSegments[2] && coloredSegments[2].length > 0 && (
+          <Polyline positions={coloredSegments[2]} color="#eab308" weight={6} opacity={0.95} />
+        )}
+        {coloredSegments[3] && coloredSegments[3].length > 0 && (
+          <Polyline positions={coloredSegments[3]} color="#f97316" weight={6} opacity={0.95} />
+        )}
+        {coloredSegments[4] && coloredSegments[4].length > 0 && (
+          <Polyline positions={coloredSegments[4]} color="#ef4444" weight={7} opacity={0.95} dashArray="6, 6" />
+        )}
+
         {positions.length > 0 && (
-          <>
-            <Polyline positions={positions} color="#22c55e" weight={6} opacity={0.95} />
-            <Marker position={positions[0]} icon={startMarkerIcon}>
-              <Popup>
-                <div style={{ textAlign: 'center', padding: '0.2rem' }}>
-                  <p style={{ margin: 0, fontWeight: 'bold', color: '#15803d', fontSize: '0.9rem' }}>
-                    🚩 Tu punto de inicio
-                  </p>
-                </div>
-              </Popup>
-            </Marker>
-          </>
+          <Marker position={positions[0]} icon={startMarkerIcon}>
+            <Popup>
+              <div style={{ textAlign: 'center', padding: '0.2rem' }}>
+                <p style={{ margin: 0, fontWeight: 'bold', color: '#15803d', fontSize: '0.9rem' }}>
+                  🚩 Tu punto de inicio
+                </p>
+              </div>
+            </Popup>
+          </Marker>
         )}
         
         {/* User GPS Live Marker in pulsing Green */}
@@ -585,7 +597,8 @@ const RutasPage = () => {
     isVehicleDetected,
     currentSpeedKmh,
     currentPosition,
-    environment,
+    currentPassLevel,
+    isPathLimitPaused,
     startRouteSession,
     pauseRouteSession,
     resumeRouteSession,
@@ -627,7 +640,7 @@ const RutasPage = () => {
     startTracking: startRoutePedometer,
     stopTracking: stopRoutePedometer,
     resetSteps: resetRoutePedometer
-  } = useStepCounter(0, { isVehicleDetected });
+  } = useStepCounter(0, { isVehicleDetected, isPathLimitPaused });
 
   // Keep pedometer state in lockstep with route tracking
   useEffect(() => {
@@ -655,7 +668,7 @@ const RutasPage = () => {
 
   // Real-time synchronization of route steps to daily total and Latidos awarding
   useEffect(() => {
-    if (!isRouteTracking) return;
+    if (!isRouteTracking || isPathLimitPaused) return;
     const delta = routeSteps - lastSyncedRouteStepsRef.current;
     if (delta > 0) {
       lastSyncedRouteStepsRef.current = routeSteps;
@@ -988,10 +1001,17 @@ const RutasPage = () => {
 
         <p style={{ fontSize: '0.85rem', marginTop: '0.75rem' }}>
           {isRouteTracking ? (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#22c55e', fontWeight: '700' }}>
-              <span style={{ width: '9px', height: '9px', backgroundColor: '#22c55e', borderRadius: '50%', display: 'inline-block', animation: 'pulseGreenDot 1.2s infinite' }}></span>
-              {tr?.rutaGrabando || tr?.registrarRuta || 'Grabando ruta activa'}...
-            </span>
+            isPathLimitPaused ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#ef4444', fontWeight: '700' }}>
+                <span style={{ width: '9px', height: '9px', backgroundColor: '#ef4444', borderRadius: '50%', display: 'inline-block' }}></span>
+                Línea 4: Pasos pausados por repetición
+              </span>
+            ) : (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#22c55e', fontWeight: '700' }}>
+                <span style={{ width: '9px', height: '9px', backgroundColor: '#22c55e', borderRadius: '50%', display: 'inline-block', animation: 'pulseGreenDot 1.2s infinite' }}></span>
+                {tr?.rutaGrabando || tr?.registrarRuta || 'Grabando ruta activa'}...
+              </span>
+            )
           ) : isRouteActive ? (
             `⏸️ ${tr?.rutaEnPausa || 'Ruta en pausa / detenida'}`
           ) : (
@@ -1018,29 +1038,60 @@ const RutasPage = () => {
         </div>
       )}
 
-      {/* Entorno: indicador interior/exterior del clasificador de sensores */}
-      {isRouteActive && environment && (
+      {/* Aviso de detención de pasos en Línea 4 (4ª pasada) */}
+      {isRouteActive && isPathLimitPaused && (
         <div style={{
           margin: '0 1rem 0.75rem',
-          backgroundColor: !environment.ready ? 'rgba(120,120,140,0.12)'
-            : environment.label === 'exterior' ? 'rgba(34,197,94,0.12)'
-            : environment.label === 'interior' ? 'rgba(231,76,60,0.12)'
-            : 'rgba(245,158,11,0.14)',
-          color: !environment.ready ? 'var(--color-detail)'
-            : environment.label === 'exterior' ? '#15803d'
-            : environment.label === 'interior' ? '#b91c1c'
-            : '#b45309',
-          padding: '0.5rem 1rem',
-          borderRadius: '1rem',
-          textAlign: 'center',
+          backgroundColor: 'rgba(239, 68, 68, 0.14)',
+          border: '1.5px solid rgba(239, 68, 68, 0.45)',
+          color: '#b91c1c',
+          padding: '0.75rem 1rem',
+          borderRadius: '1.2rem',
           fontFamily: 'var(--font-main)',
-          fontWeight: '700',
-          fontSize: '0.82rem',
-          border: '1.5px solid transparent'
+          boxShadow: '0 4px 12px rgba(239, 68, 68, 0.08)'
         }}>
-          {environment.ready
-            ? `${tr?.[`env${environment.label.charAt(0).toUpperCase() + environment.label.slice(1)}`] || environment.label} · ${Math.round(environment.pOutdoor * 100)}%`
-            : (tr?.envCalibrando || 'Calibrando sensores…')}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+            <span style={{ fontSize: '1.25rem' }}>🛑</span>
+            <div style={{ fontWeight: '800', fontSize: '0.85rem' }}>
+              Línea 4 alcanzada: Tramo repetido 4 veces
+            </div>
+          </div>
+          <div style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)' }}>
+            Has pasado 4 veces por este mismo tramo. Conteo de pasos y distancia pausados. Camina hacia una calle o zona nueva para continuar sumando Latidos.
+          </div>
+        </div>
+      )}
+
+      {/* Indicador visual de 4 líneas y pasadas de la ruta activa */}
+      {isRouteActive && (
+        <div style={{
+          margin: '0 1rem 0.6rem',
+          padding: '0.45rem 0.75rem',
+          borderRadius: '1rem',
+          backgroundColor: 'var(--color-card)',
+          boxShadow: 'var(--shadow-card)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '0.72rem',
+          fontWeight: '700'
+        }}>
+          <span style={{ color: currentPassLevel === 1 ? '#16a34a' : 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '4px', opacity: currentPassLevel === 1 ? 1 : 0.7 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#22c55e', display: 'inline-block' }}></span>
+            1ª Verde
+          </span>
+          <span style={{ color: currentPassLevel === 2 ? '#ca8a04' : 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '4px', opacity: currentPassLevel === 2 ? 1 : 0.7 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#eab308', display: 'inline-block' }}></span>
+            2ª Vuelta
+          </span>
+          <span style={{ color: currentPassLevel === 3 ? '#ea580c' : 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '4px', opacity: currentPassLevel === 3 ? 1 : 0.7 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#f97316', display: 'inline-block' }}></span>
+            3ª Repite
+          </span>
+          <span style={{ color: currentPassLevel === 4 ? '#dc2626' : 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '4px', opacity: currentPassLevel === 4 ? 1 : 0.7 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ef4444', display: 'inline-block' }}></span>
+            4ª Pausa
+          </span>
         </div>
       )}
 

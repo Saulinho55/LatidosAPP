@@ -85,6 +85,16 @@ const GoogleReCaptcha = ({ onVerify, theme = 'light' }) => {
     };
   }, [siteKey, theme, handleVerifyCallback, handleExpiredCallback, handleErrorCallback]);
 
+  // Fallback de seguridad: si reCAPTCHA tarda más de 2 segundos (localhost, bloqueo o adblock), activar casilla local
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!isLoaded) {
+        setLoadError(true);
+      }
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [isLoaded]);
+
   // Fallback in case Google API is blocked (e.g. adblock / offline network)
   if (loadError) {
     return (

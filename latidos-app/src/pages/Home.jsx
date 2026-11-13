@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import StepsCard from '../components/Stepcards';
+import HomeRouteMap from '../components/HomeRouteMap';
 import StreakCard from '../components/Racha';
 import StepChart from '../components/StepChart';
 import NFCConnection from '../components/NFC';
@@ -28,7 +29,12 @@ const Home = () => {
     isRouteActive,
     isRouteTracking,
     routeDistanceM,
-    discardRouteSession
+    discardRouteSession,
+    currentPosition,
+    routePath,
+    currentPassLevel,
+    isPathLimitPaused,
+    clearNormalPath
   } = useLatidos();
 
   const navigate = useNavigate();
@@ -43,7 +49,7 @@ const Home = () => {
     startTracking,
     stopTracking,
     resetSteps,
-  } = useStepCounter(steps, { isVehicleDetected });
+  } = useStepCounter(steps, { isVehicleDetected, isPathLimitPaused });
 
   // Ref to track how many steps we've already synced to DB / awarded latidos for
   const lastSyncedStepsRef = useRef(steps);
@@ -64,7 +70,7 @@ const Home = () => {
 
   // Main step sync effect: fires when pedometer counts a new step
   useEffect(() => {
-    if (!isTracking) return;
+    if (!isTracking || isPathLimitPaused) return;
     if (pedometerSteps <= lastSyncedStepsRef.current) return;
 
     const newTotal = pedometerSteps;
@@ -83,7 +89,7 @@ const Home = () => {
       registrarActividad(newTotal, latidosToAward);
       latidosAwardPendingRef.current = false;
     }
-  }, [pedometerSteps, isTracking]);
+  }, [pedometerSteps, isTracking, isPathLimitPaused]);
 
   // Flush steps to DB on tab hide / app background
   useEffect(() => {
@@ -226,6 +232,17 @@ const Home = () => {
         onStart={() => isAuthenticated ? startTracking() : navigate('/login')}
         onStop={stopTracking}
       />
+
+      {/* Mapa en vivo de rutas y 4 líneas en pantalla normal */}
+      {isAuthenticated && (
+        <HomeRouteMap
+          currentPosition={currentPosition}
+          routePath={routePath}
+          currentPassLevel={currentPassLevel}
+          isPathLimitPaused={isPathLimitPaused}
+          onClearPath={clearNormalPath}
+        />
+      )}
 
       <StreakCard
         dias={isAuthenticated ? racha : 0}

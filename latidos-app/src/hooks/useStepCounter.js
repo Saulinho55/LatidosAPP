@@ -34,9 +34,28 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
     }
   }, [initialSteps]);
 
+  // GPS displacement steps (permite sumar pasos tanto en móvil como en PC DevTools al mover coordenadas)
+  useEffect(() => {
+    const handleGpsStep = (e) => {
+      if (options.isVehicleDetected) return;
+      if (options.isPathLimitPaused) return;
+
+      const added = (e.detail && e.detail.steps) || 1;
+      stepsRef.current += added;
+      setSteps(stepsRef.current);
+      if (typeof options.onStep === 'function') {
+        options.onStep(stepsRef.current);
+      }
+    };
+
+    window.addEventListener('latidos:gps_step', handleGpsStep);
+    return () => window.removeEventListener('latidos:gps_step', handleGpsStep);
+  }, [options.isVehicleDetected, options.isPathLimitPaused, options.onStep]);
+
   const handleMotion = useCallback((event) => {
     if (!isTrackingRef.current) return;
     if (options.isVehicleDetected) return;
+    if (options.isPathLimitPaused) return;
 
     let linMag = 0;
     const nativeLin = event.acceleration;
@@ -99,7 +118,7 @@ export const useStepCounter = (initialSteps = 0, options = {}) => {
     }
 
     lastLinMag.current = linMag;
-  }, [options.isVehicleDetected, options.onStep]);
+  }, [options.isVehicleDetected, options.isPathLimitPaused, options.onStep]);
 
   const startTracking = useCallback(async () => {
     const isMobile = Capacitor.isNativePlatform() || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { supabase } from '../lib/supabase';
 import { supabaseService } from '../services/supabaseService';
 import { haversineDistance } from '../hooks/useGeolocation';
-import { outdoorEvidence, startAuxSensors, stopAuxSensors } from '../utils/outdoorDetector';
+import { evaluatePointPass } from '../utils/routePathPasses';
 import { getLocalDateStr, computeWeeklyStepsFromActivity, computeStreakFromActivity } from '../utils/dateUtils';
 import { t } from '../i18n';
 
@@ -41,11 +41,13 @@ export const LatidosProvider = ({ children }) => {
   const [currentSpeedKmh, setCurrentSpeedKmh] = useState(0);
   const [currentPosition, setCurrentPosition] = useState({ lat: 28.0048, lon: -15.4158, accuracy: 100, speed: 0, isReal: false });
   const [hasRealLocation, setHasRealLocation] = useState(false);
-  // ── Clasificación Interior/Exterior (ventana deslizante, best-effort) ──
-  const [environment, setEnvironment] = useState({ ready: false, pOutdoor: 0.5, label: 'calibrando', signals: {}, samples: 0 });
+  // Sistema de 4 líneas y pasadas (Anti-farming)
+  const [currentPassLevel, setCurrentPassLevel] = useState(1);
+  const [isPathLimitPaused, setIsPathLimitPaused] = useState(false);
   const globalWatchIdRef = useRef(null);
 
   const routeWatchIdRef = useRef(null);
+  const routePathRef = useRef([]);
   const routeLastPointRef = useRef(null);
   const routeLastTimeRef = useRef(null);
   const routeTimerRef = useRef(null);
@@ -62,8 +64,6 @@ export const LatidosProvider = ({ children }) => {
       const { latitude: lat, longitude: lon, accuracy, speed } = pos.coords;
       setCurrentPosition({ lat, lon, accuracy, speed: speed || 0, isReal: true });
       setHasRealLocation(true);
-      // Alimentar el clasificador interior/exterior con cada fix GNSS
-      outdoorEvidence.addGnssSample(accuracy);
     };
 
     // Phase 1: Fast network fix (cellular / Wi-Fi - works in <1s even indoors)
@@ -133,29 +133,13 @@ export const LatidosProvider = ({ children }) => {
     return () => clearInterval(routeTimerRef.current);
   }, [isRouteTracking]);
 
-  // ── Clasificador Interior/Exterior: sensores aux + evaluación periódica ──
-  // Arranca al montar la app y no interfiere con el conteo de pasos: solo observa.
+  const isRouteTrackingRef = useRef(isRouteTracking);
   useEffect(() => {
-    startAuxSensors();
-    const evalTimer = setInterval(() => {
-      setEnvironment(outdoorEvidence.evaluate());
-    }, 3000);
-    return () => {
-      clearInterval(evalTimer);
-      stopAuxSensors();
-    };
-  }, []);
+    isRouteTrackingRef.current = isRouteTracking;
+  }, [isRouteTracking]);
 
-  // GPS Tracking for active route
+  // GPS Tracking continuo para modo normal y modo ruta (con sistema de 4 líneas y pasadas)
   useEffect(() => {
-    if (!isRouteTracking) {
-      if (routeWatchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
-        navigator.geolocation.clearWatch(routeWatchIdRef.current);
-        routeWatchIdRef.current = null;
-      }
-      return;
-    }
-
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
 
     const handleRoutePosition = (pos) => {
@@ -186,8 +170,6 @@ export const LatidosProvider = ({ children }) => {
       setCurrentSpeedKmh(speedKmh);
       setCurrentPosition({ lat, lon, accuracy, speed: speedKmh / 3.6, isReal: true });
       setHasRealLocation(true);
-      // Los fixes de la ruta también alimentan el clasificador interior/exterior
-      outdoorEvidence.addGnssSample(accuracy);
 
       // Vehicular speed check (> 20 km/h)
       if (speedKmh > 20.0) {
@@ -219,7 +201,11 @@ export const LatidosProvider = ({ children }) => {
       if (!routeLastPointRef.current) {
         routeLastPointRef.current = newPoint;
         routeLastTimeRef.current = now;
-        setRoutePath([newPoint]);
+        const firstPt = { ...newPoint, time: now, pass: 1 };
+        routePathRef.current = [firstPt];
+        setRoutePath([firstPt]);
+        setCurrentPassLevel(1);
+        setIsPathLimitPaused(false);
         return;
       }
 
@@ -244,10 +230,33 @@ export const LatidosProvider = ({ children }) => {
       // Small 0.5 - 1.5m GPS noise while sitting/standing still is ignored.
       // As soon as the user takes 2-3 genuine walking steps, dist exceeds 2m and accumulates.
       if (dist >= 2.0) {
-        setRoutePath(prev => [...prev, newPoint]);
+        const passInfo = evaluatePointPass(routePathRef.current, newPoint);
+        const ptWithPass = { ...newPoint, time: now, pass: passInfo.pass };
+        routePathRef.current = [...routePathRef.current, ptWithPass];
+        setRoutePath(prev => [...prev, ptWithPass]);
+        setCurrentPassLevel(passInfo.pass);
+        setIsPathLimitPaused(passInfo.isLimit);
         routeLastPointRef.current = newPoint;
         routeLastTimeRef.current = now;
-        setRouteDistanceM(prevDist => prevDist + dist);
+
+        // Anti-farming: Line 4 stops accumulating distance and steps
+        if (!passInfo.isLimit) {
+          if (isRouteTrackingRef.current) {
+            setRouteDistanceM(prevDist => prevDist + dist);
+          }
+          // Conversión de desplazamiento GPS a pasos (1m ≈ 1.312 pasos)
+          const walkSteps = Math.round(dist * 1.312);
+          if (walkSteps > 0) {
+            setSteps(prev => {
+              const next = (prev || 0) + walkSteps;
+              pendingStepsRef.current = next;
+              return next;
+            });
+            try {
+              window.dispatchEvent(new CustomEvent('latidos:gps_step', { detail: { steps: walkSteps } }));
+            } catch (e) {}
+          }
+        }
       }
     };
 
@@ -275,7 +284,7 @@ export const LatidosProvider = ({ children }) => {
         routeWatchIdRef.current = null;
       }
     };
-  }, [isRouteTracking, userId]);
+  }, []);
 
   const loadRecommendedRoutes = async () => {
     try {
@@ -1191,12 +1200,15 @@ export const LatidosProvider = ({ children }) => {
     setRoutePoints([]);
     setReplicatedRoute(targetReplicated || null);
     setIsVehicleDetected(false);
+    setCurrentPassLevel(1);
+    setIsPathLimitPaused(false);
     lastRouteStepsAwardedRef.current = 0;
     lastRouteLatidosAwardedRef.current = 0;
     routeRecentReadingsRef.current = [];
     routeVehicleReadingsCount.current = 0;
     routeLastPointRef.current = null;
     routeLastTimeRef.current = null;
+    routePathRef.current = [];
     setRoutePath([]);
   };
 
@@ -1214,16 +1226,28 @@ export const LatidosProvider = ({ children }) => {
     setIsRouteTracking(false);
     setRouteElapsed(0);
     setRouteDistanceM(0);
+    routePathRef.current = [];
     setRoutePath([]);
     setRoutePoints([]);
     setReplicatedRoute(null);
     setIsVehicleDetected(false);
+    setCurrentPassLevel(1);
+    setIsPathLimitPaused(false);
     lastRouteStepsAwardedRef.current = 0;
     lastRouteLatidosAwardedRef.current = 0;
     routeRecentReadingsRef.current = [];
     routeVehicleReadingsCount.current = 0;
     routeLastPointRef.current = null;
     routeLastTimeRef.current = null;
+  };
+
+  const clearNormalPath = () => {
+    routePathRef.current = [];
+    routeLastPointRef.current = null;
+    routeLastTimeRef.current = null;
+    setRoutePath([]);
+    setCurrentPassLevel(1);
+    setIsPathLimitPaused(false);
   };
 
   const addRouteCheckpoint = (name, customCoords = null) => {
@@ -1276,6 +1300,8 @@ export const LatidosProvider = ({ children }) => {
       await saveRoute(finalRouteData);
     }
     
+    setCurrentPassLevel(1);
+    setIsPathLimitPaused(false);
     discardRouteSession();
     return finalRouteData;
   };
@@ -1460,7 +1486,8 @@ export const LatidosProvider = ({ children }) => {
       // Active Route Session (persists across tabs)
       isRouteActive, isRouteTracking, routeElapsed, routeDistanceM, routePath, routePoints,
       replicatedRoute, isVehicleDetected, currentSpeedKmh, currentPosition, hasRealLocation,
-      environment,
+      // Sistema de 4 líneas y pasadas
+      currentPassLevel, isPathLimitPaused, clearNormalPath,
       startRouteSession, pauseRouteSession, resumeRouteSession, discardRouteSession,
       addRouteCheckpoint, editRouteCheckpoint, removeRouteCheckpoint, finishRouteSession,
       login, logout, loginUser, registerUser,

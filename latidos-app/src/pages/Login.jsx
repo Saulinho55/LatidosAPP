@@ -7,7 +7,7 @@ import latidosIcon from '../assets/latidos_icon.png';
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { loginUser, registerUser, isAuthenticated, theme } = useLatidos();
+  const { loginUser, registerUser, login, isAuthenticated, theme } = useLatidos();
   
   const [isRegistering, setIsRegistering] = useState(() => Boolean(location.state?.register));
   const [isLoading, setIsLoading] = useState(false);
@@ -402,6 +402,27 @@ const Login = () => {
           }}
         >
           {isLoading ? 'Procesando...' : (isRegistering ? 'Crear mi cuenta' : 'Iniciar sesión')}
+        </button>
+
+        {/* Acceso rápido para pruebas en PC / Invitado */}
+        <button
+          type="button"
+          onClick={() => login()}
+          style={{
+            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            color: 'var(--color-accent, #22c55e)',
+            border: '1.5px dashed var(--color-accent, #22c55e)',
+            padding: '0.75rem',
+            borderRadius: '2rem',
+            fontSize: '0.85rem',
+            fontWeight: '700',
+            fontFamily: 'var(--font-main)',
+            width: '100%',
+            cursor: 'pointer',
+            marginBottom: '0.5rem'
+          }}
+        >
+          🚀 Entrar como Invitado / Pruebas
         </button>
       </form>
 

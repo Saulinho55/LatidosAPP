@@ -39,8 +39,13 @@ export const t = {
     // Entorno (clasificación interior/exterior)
     envCalibrando: 'Calibrando sensores…',
     envExterior: 'En la calle ✓',
-    envInterior: 'En interior',
+    envInterior: 'En casa / interior',
     envDudoso: 'Entorno sin confirmar',
+    envAvisoPausadoCasa: 'Conteo de pasos en pausa: Detectado en casa o interior. ¡Sal a la calle a caminar para sumar Latidos!',
+    envAvisoPausadoRuta: 'Ruta en pausa: Detectado en casa o interior. Sal a la calle para continuar sumando pasos.',
+    envBotonCalle: 'Estoy en la calle',
+    envGuardarCasa: 'Guardar esta Wi-Fi como Mi Casa',
+    envCasaGuardada: '✓ Red guardada como tu casa',
 
     // Rutas
     misRutas: 'Mis Rutas',
@@ -179,8 +184,13 @@ export const t = {
     // Environment (indoor/outdoor classification)
     envCalibrando: 'Calibrating sensors…',
     envExterior: 'Outdoors ✓',
-    envInterior: 'Indoors',
+    envInterior: 'At home / Indoors',
     envDudoso: 'Environment unconfirmed',
+    envAvisoPausadoCasa: 'Step counting paused: Detected at home or indoors. Head outside to walk and earn Latidos!',
+    envAvisoPausadoRuta: 'Route paused: Detected at home or indoors. Go outside to continue earning steps.',
+    envBotonCalle: "I'm outdoors",
+    envGuardarCasa: 'Save this Wi-Fi as My Home',
+    envCasaGuardada: '✓ Network saved as your home',
 
     // Rutas
     misRutas: 'My Routes',

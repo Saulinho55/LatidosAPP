@@ -63,11 +63,13 @@ const StepsCard = ({ pasos, objetivo = 10000, isTracking, isSupported, onStart, 
         }}>
           <span style={{
             width: '7px', height: '7px', borderRadius: '50%',
-            backgroundColor: '#4ade80', display: 'inline-block',
+            backgroundColor: '#4ade80',
+            display: 'inline-block',
             animation: 'pulse 1.5s infinite'
           }} />
           <span style={{
-            fontSize: '0.78rem', color: '#4ade80',
+            fontSize: '0.78rem',
+            color: '#4ade80',
             fontFamily: 'var(--font-main)', fontWeight: '600'
           }}>
             {tr?.iniciar || 'Contando pasos...'}
